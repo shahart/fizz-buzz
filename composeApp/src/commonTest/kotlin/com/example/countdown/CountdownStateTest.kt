@@ -25,4 +25,43 @@ class CountdownStateTest {
 
         assertEquals(0, state.secondsRemaining)
     }
+
+    @Test
+    fun boomNumbersRequireBoom() {
+        for (number in listOf(7, 14, 17, 70, 97)) {
+            assertTrue("boom".matchesAnswerFor(number))
+            assertTrue("BOOM!".matchesAnswerFor(number))
+            assertTrue("boom boom".matchesAnswerFor(number))
+            assertFalse(number.toString().matchesAnswerFor(number))
+        }
+    }
+
+    @Test
+    fun regularNumbersAcceptDigitsAndEnglishWords() {
+        assertTrue("43".matchesAnswerFor(43))
+        assertTrue("forty three".matchesAnswerFor(43))
+        assertTrue("חמש".matchesAnswerFor(5))
+        assertTrue("חמישה".matchesAnswerFor(5))
+        assertTrue("חמישים וארבע".matchesAnswerFor(54))
+        assertTrue("ארבעים ושלושה".matchesAnswerFor(43))
+        assertFalse("boom".matchesAnswerFor(43))
+        assertFalse("42".matchesAnswerFor(43))
+    }
+
+    @Test
+    fun correctAnswerAdvancesAndResetsTimer() {
+        val next = CountdownState(number = 41, secondsRemaining = 2).answer("forty-one")
+
+        assertEquals(42, next.number)
+        assertEquals(STARTING_SECONDS, next.secondsRemaining)
+        assertFalse(next.hasFailed)
+    }
+
+    @Test
+    fun wrongAnswerFailsRound() {
+        val failed = CountdownState(number = 42).answer("43")
+
+        assertTrue(failed.hasFailed)
+        assertTrue(failed.isFinished)
+    }
 }

@@ -1,6 +1,6 @@
 # Countdown Number
 
-A small Compose Multiplatform app for Android and web. It displays a random number from 1 through 100, counts down from 7, and shows `TIMED-OUT` with a tone at zero.
+A small Compose Multiplatform voice game for Android and web. Say the displayed number within seven seconds, or say `BOOM` when it is divisible by 7 or contains the digit 7. Correct answers advance the number and restart the timer; a mistake or timeout flashes `BOOM` and plays a tone.
 
 ## Run
 
@@ -19,4 +19,4 @@ Use JDK 17 through 24.
 
 The production website is generated under `composeApp/build/dist/wasmJs/productionExecutable`.
 
-Browser audio policies may require one user interaction before a page is allowed to play sound. If the first automatic tone is blocked, press **New number** or **Play again** to start another round after interacting with the page.
+The app requests microphone access when you press **Start game**. Browser support requires the Web Speech API (Chrome or another compatible browser) and microphone permission.
