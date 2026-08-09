@@ -43,9 +43,24 @@ fun String.matchesAnswerFor(number: Int): Boolean {
         return words.isNotEmpty() && words.all { it == "boom" || it == "בום" }
     }
     return normalized.toIntOrNull() == number ||
+        spokenNumericGroups(normalized) == number ||
         englishNumber(normalized) == number ||
         hebrewNumber(normalized) == number ||
         spokenDigits(normalized) == number
+}
+
+private fun spokenNumericGroups(value: String): Int? {
+    val groups = value.replace('-', ' ').split(' ').filter(String::isNotBlank)
+    if (groups.size < 2) return null
+    val numbers = groups.map { it.toIntOrNull() ?: return null }
+
+    if (numbers.all { it in 0..9 }) {
+        return numbers.fold(0) { result, digit -> result * 10 + digit }
+    }
+    if (numbers.size == 2 && numbers[0] in 20..90 && numbers[0] % 10 == 0 && numbers[1] in 1..9) {
+        return numbers[0] + numbers[1]
+    }
+    return null
 }
 
 private fun spokenDigits(value: String): Int? {
@@ -98,12 +113,21 @@ private fun englishNumber(value: String): Int? {
 }
 
 private fun hebrewNumber(value: String): Int? {
-    val words = value.replace('-', ' ').split(' ').filter(String::isNotBlank)
+    val spokenWords = value.replace('-', ' ').split(' ').filter(String::isNotBlank)
+    val words = if (
+        spokenWords.size >= 2 &&
+        spokenWords[0] in setOf("טיר", "תיר", "תר", "טר") &&
+        spokenWords[1] in setOf("טי", "תי")
+    ) {
+        listOf("טירטי") + spokenWords.drop(2)
+    } else {
+        spokenWords
+    }
     if (words.isEmpty()) return null
 
     val units = mapOf(
         "אפס" to 0,
-        "אחד" to 1, "אחת" to 1,
+        "אחד" to 1, "אחת" to 1, "וואן" to 1, "ואן" to 1,
         "שניים" to 2, "שתיים" to 2, "שני" to 2, "שתי" to 2,
         "שלוש" to 3, "שלושה" to 3,
         "ארבע" to 4, "ארבעה" to 4,
@@ -116,7 +140,7 @@ private fun hebrewNumber(value: String): Int? {
     )
     val tens = mapOf(
         "עשרים" to 20, "טוונטי" to 20, "טוונ्टी" to 20, "טווניטי" to 20,
-        "שלושים" to 30,
+        "שלושים" to 30, "טירטי" to 30, "תירטי" to 30, "תרטי" to 30,
         "ארבעים" to 40,
         "חמישים" to 50,
         "שישים" to 60,
