@@ -1,4 +1,4 @@
-package com.example.countdown
+package com.shahartal.countdown
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

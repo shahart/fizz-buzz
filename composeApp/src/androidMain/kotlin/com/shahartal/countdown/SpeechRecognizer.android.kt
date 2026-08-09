@@ -1,4 +1,4 @@
-package com.example.countdown
+package com.shahartal.countdown
 
 import android.Manifest
 import android.content.Context

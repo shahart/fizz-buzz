@@ -1,4 +1,4 @@
-package com.example.countdown
+package com.shahartal.countdown
 
 import kotlin.JsFun
 import kotlin.js.ExperimentalWasmJsInterop

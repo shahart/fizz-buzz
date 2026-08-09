@@ -1,4 +1,4 @@
-package com.example.countdown
+package com.shahartal.countdown
 
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat

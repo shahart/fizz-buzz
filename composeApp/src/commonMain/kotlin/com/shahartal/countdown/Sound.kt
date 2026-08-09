@@ -1,4 +1,4 @@
-package com.example.countdown
+package com.shahartal.countdown
 
 expect fun playTimeoutSound()
 

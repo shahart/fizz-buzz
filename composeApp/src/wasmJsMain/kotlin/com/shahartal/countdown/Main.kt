@@ -1,4 +1,4 @@
-package com.example.countdown
+package com.shahartal.countdown
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport

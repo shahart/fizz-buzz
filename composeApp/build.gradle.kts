@@ -38,11 +38,11 @@ kotlin {
 }
 
 android {
-    namespace = "com.example.countdown"
+    namespace = "com.shahartal.countdown"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.countdown"
+        applicationId = "com.shahartal.countdown"
         minSdk = 23
         targetSdk = 36
         versionCode = 1

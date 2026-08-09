@@ -1,4 +1,4 @@
-package com.example.countdown
+package com.shahartal.countdown
 
 const val STARTING_SECONDS = 7
 
