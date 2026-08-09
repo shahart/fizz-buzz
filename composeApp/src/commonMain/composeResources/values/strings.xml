@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ready">READY?</string>
+    <string name="instructions">Say the number — or BOOM for multiples of 7 and numbers containing 7</string>
+    <string name="speech_unavailable">Speech recognition is not available on this device</string>
+    <string name="start_game">Start game</string>
+    <string name="boom">BOOM</string>
+    <string name="say_it_now">SAY IT NOW</string>
+    <string name="time_is_up">Time is up</string>
+    <string name="wrong_answer">Wrong answer</string>
+    <string name="say_boom">Say BOOM</string>
+    <string name="seconds_remaining_listening">seconds remaining • microphone listening</string>
+    <string name="heard">Heard: %1$s</string>
+    <string name="play_again">Play again</string>
+</resources>

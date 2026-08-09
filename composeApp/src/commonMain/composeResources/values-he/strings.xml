@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ready">מוכנים?</string>
+    <string name="instructions">אמרו את המספר — או בום עבור כפולות של 7 ומספרים שמכילים את הספרה 7</string>
+    <string name="speech_unavailable">זיהוי דיבור אינו זמין במכשיר הזה</string>
+    <string name="start_game">התחלת משחק</string>
+    <string name="boom">בום</string>
+    <string name="say_it_now">אמרו עכשיו</string>
+    <string name="time_is_up">הזמן נגמר</string>
+    <string name="wrong_answer">תשובה שגויה</string>
+    <string name="say_boom">אמרו בום</string>
+    <string name="seconds_remaining_listening">שניות נותרו • המיקרופון מאזין</string>
+    <string name="heard">שמעתי: %1$s</string>
+    <string name="play_again">לשחק שוב</string>
+</resources>

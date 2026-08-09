@@ -33,7 +33,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import fizz_buzz.composeapp.generated.resources.Res
+import fizz_buzz.composeapp.generated.resources.boom
+import fizz_buzz.composeapp.generated.resources.heard
+import fizz_buzz.composeapp.generated.resources.instructions
+import fizz_buzz.composeapp.generated.resources.play_again
+import fizz_buzz.composeapp.generated.resources.ready
+import fizz_buzz.composeapp.generated.resources.say_boom
+import fizz_buzz.composeapp.generated.resources.say_it_now
+import fizz_buzz.composeapp.generated.resources.seconds_remaining_listening
+import fizz_buzz.composeapp.generated.resources.speech_unavailable
+import fizz_buzz.composeapp.generated.resources.start_game
+import fizz_buzz.composeapp.generated.resources.time_is_up
+import fizz_buzz.composeapp.generated.resources.wrong_answer
 import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.stringResource
 import kotlin.random.Random
 
 private val Navy = Color(0xFF102A43)
@@ -115,13 +129,13 @@ fun App() {
                 verticalArrangement = Arrangement.Center,
             ) {
                 if (!started) {
-                    Text("READY?", color = Navy, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(Res.string.ready), color = Navy, fontSize = 32.sp, fontWeight = FontWeight.Bold)
                     Spacer(Modifier.height(16.dp))
                     Text(
                         text = if (speechRecognizer.isSupported) {
-                            "Say the number — or BOOM for multiples of 7 and numbers containing 7"
+                            stringResource(Res.string.instructions)
                         } else {
-                            "Speech recognition is not available on this device"
+                            stringResource(Res.string.speech_unavailable)
                         },
                         color = Navy.copy(alpha = 0.7f),
                         fontSize = 16.sp,
@@ -136,13 +150,13 @@ fun App() {
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Blue),
                     ) {
-                        Text("Start game", modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+                        Text(stringResource(Res.string.start_game), modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
                     }
                     return@Column
                 }
 
                 Text(
-                    text = if (failed) "BOOM" else "SAY IT NOW",
+                    text = if (failed) stringResource(Res.string.boom) else stringResource(Res.string.say_it_now),
                     color = if (failed) Color.White else Navy,
                     fontSize = if (failed) 56.sp else 24.sp,
                     fontWeight = FontWeight.Black,
@@ -163,10 +177,10 @@ fun App() {
                 )
                 Text(
                     text = when {
-                        state.hasTimedOut -> "Time is up"
-                        state.hasFailed -> "Wrong answer"
-                        state.number.isBoomNumber() -> "Say BOOM"
-                        else -> "seconds remaining • microphone listening"
+                        state.hasTimedOut -> stringResource(Res.string.time_is_up)
+                        state.hasFailed -> stringResource(Res.string.wrong_answer)
+                        state.number.isBoomNumber() -> stringResource(Res.string.say_boom)
+                        else -> stringResource(Res.string.seconds_remaining_listening)
                     },
                     color = if (failed) Color.White else Navy.copy(alpha = 0.7f),
                     fontSize = 16.sp,
@@ -174,7 +188,7 @@ fun App() {
                 lastHeard?.let { spoken ->
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        text = "Heard: $spoken",
+                        text = stringResource(Res.string.heard, spoken),
                         color = if (failed) Color.White else Navy,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
@@ -190,7 +204,7 @@ fun App() {
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Blue),
                     ) {
-                        Text("Play again", modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+                        Text(stringResource(Res.string.play_again), modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
                     }
                 }
             }
