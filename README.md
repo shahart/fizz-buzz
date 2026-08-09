@@ -1,4 +1,4 @@
-# Countdown Number
+# fizz-buzz 7-boom
 
 A small Compose Multiplatform voice game for Android and web. Say the displayed number within seven seconds, or say `BOOM` when it is divisible by 7 or contains the digit 7. Correct answers advance the number and restart the timer; a mistake or timeout flashes `BOOM` and plays a tone.
 
