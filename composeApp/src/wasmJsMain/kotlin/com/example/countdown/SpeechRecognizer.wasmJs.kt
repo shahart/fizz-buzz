@@ -8,12 +8,15 @@ import kotlin.js.ExperimentalWasmJsInterop
 
 private class BrowserSpeechRecognizerController : SpeechRecognizerController {
     override val isSupported: Boolean = browserSpeechRecognitionSupported()
+    override val hasDetectedSpeech: Boolean
+        get() = browserHasDetectedSpeech()
 
     override fun startListening() = startBrowserSpeechRecognition()
 
     override fun stopListening() = stopBrowserSpeechRecognition()
 
-    override fun consumeResult(): String? = consumeBrowserSpeechResult()
+    override fun consumeResults(): List<String>? =
+        consumeBrowserSpeechResult()?.let(::listOf)
 }
 
 @Composable
@@ -37,6 +40,7 @@ private external fun browserSpeechRecognitionSupported(): Boolean
             window.__countdownRecognition.abort();
         }
         window.__countdownSpeechResult = null;
+        window.__countdownSpeechDetected = false;
         window.__countdownRecognitionActive = true;
         const recognition = new SpeechRecognition();
         window.__countdownRecognition = recognition;
@@ -44,6 +48,7 @@ private external fun browserSpeechRecognitionSupported(): Boolean
         recognition.continuous = false;
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
+        recognition.onspeechstart = () => { window.__countdownSpeechDetected = true; };
         recognition.onresult = event => {
             window.__countdownSpeechResult = event.results[0][0].transcript;
             window.__countdownRecognitionActive = false;
@@ -84,3 +89,7 @@ private external fun stopBrowserSpeechRecognition()
     }""",
 )
 private external fun consumeBrowserSpeechResult(): String?
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("() => Boolean(window.__countdownSpeechDetected)")
+private external fun browserHasDetectedSpeech(): Boolean

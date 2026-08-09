@@ -5,9 +5,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -19,65 +22,154 @@ import androidx.core.content.ContextCompat
 private class AndroidSpeechRecognizerController(
     private val context: Context,
 ) : SpeechRecognizerController, RecognitionListener {
+    private val handler = Handler(Looper.getMainLooper())
     private val recognizer = SpeechRecognizer.createSpeechRecognizer(context).also {
         it.setRecognitionListener(this)
     }
     private val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
         putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
-        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+        putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
+        putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+        putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 700L)
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 500L)
     }
-    private var result: String? = null
+    private var results: List<String>? = null
+    private var latestPartial: String? = null
+    override var hasDetectedSpeech: Boolean = false
+        private set
     private var active = false
+    private var permissionRequestPending = false
+    private var destroyed = false
+    private val startRunnable = Runnable { beginListening() }
     var requestPermission: () -> Unit = {}
 
     override val isSupported: Boolean = SpeechRecognizer.isRecognitionAvailable(context)
 
     override fun startListening() {
-        result = null
+        results = null
+        latestPartial = null
+        hasDetectedSpeech = false
         active = true
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            requestPermission()
+            if (!permissionRequestPending) {
+                permissionRequestPending = true
+                requestPermission()
+            }
             return
         }
-        recognizer.startListening(intent)
+        scheduleStart(delayMillis = 0L)
     }
 
     fun onPermissionResult(granted: Boolean) {
-        if (granted && active) recognizer.startListening(intent)
+        permissionRequestPending = false
+        if (granted && active) {
+            scheduleStart(delayMillis = 0L)
+        } else if (!granted) {
+            active = false
+            Log.w(TAG, "Microphone permission was denied")
+        }
     }
 
     override fun stopListening() {
         active = false
+        handler.removeCallbacks(startRunnable)
         recognizer.cancel()
     }
 
-    override fun consumeResult(): String? = result.also { result = null }
+    override fun consumeResults(): List<String>? = results.also { results = null }
 
     fun destroy() {
         active = false
+        destroyed = true
+        handler.removeCallbacksAndMessages(null)
         recognizer.destroy()
     }
 
     override fun onResults(results: Bundle?) {
-        result = results
+        val recognized = results
             ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            ?.firstOrNull()
-    }
-
-    override fun onError(error: Int) {
-        if (active && error != SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
-            recognizer.startListening(intent)
+            ?.filter(String::isNotBlank)
+        if (!recognized.isNullOrEmpty()) {
+            this.results = recognized
+            active = false
+            handler.removeCallbacks(startRunnable)
+        } else if (active) {
+            scheduleStart(RETRY_DELAY_MILLIS)
         }
     }
 
+    override fun onError(error: Int) {
+        Log.w(TAG, "Speech recognition error: ${errorName(error)} ($error)")
+        when (error) {
+            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> active = false
+            SpeechRecognizer.ERROR_CLIENT -> if (active) scheduleStart(RETRY_DELAY_MILLIS)
+            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> if (active) scheduleStart(BUSY_RETRY_DELAY_MILLIS)
+            else -> if (active) scheduleStart(RETRY_DELAY_MILLIS)
+        }
+    }
+
+    private fun scheduleStart(delayMillis: Long) {
+        if (!active || destroyed) return
+        handler.removeCallbacks(startRunnable)
+        handler.postDelayed(startRunnable, delayMillis)
+    }
+
+    private fun beginListening() {
+        if (!active || destroyed) return
+        try {
+            recognizer.startListening(intent)
+            Log.d(TAG, "Speech recognition listening")
+        } catch (exception: RuntimeException) {
+            Log.w(TAG, "Unable to start speech recognition", exception)
+            scheduleStart(BUSY_RETRY_DELAY_MILLIS)
+        }
+    }
+
+    private fun errorName(error: Int): String = when (error) {
+        SpeechRecognizer.ERROR_AUDIO -> "audio"
+        SpeechRecognizer.ERROR_CLIENT -> "client"
+        SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> "insufficient permissions"
+        SpeechRecognizer.ERROR_NETWORK -> "network"
+        SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> "network timeout"
+        SpeechRecognizer.ERROR_NO_MATCH -> "no match"
+        SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> "recognizer busy"
+        SpeechRecognizer.ERROR_SERVER -> "server"
+        SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "speech timeout"
+        else -> "unknown"
+    }
+
     override fun onReadyForSpeech(params: Bundle?) = Unit
-    override fun onBeginningOfSpeech() = Unit
+    override fun onBeginningOfSpeech() {
+        hasDetectedSpeech = true
+    }
     override fun onRmsChanged(rmsdB: Float) = Unit
     override fun onBufferReceived(buffer: ByteArray?) = Unit
-    override fun onEndOfSpeech() = Unit
-    override fun onPartialResults(partialResults: Bundle?) = Unit
+    override fun onEndOfSpeech() {
+        latestPartial?.let { partial ->
+            handler.postDelayed({
+                if (active && results == null && latestPartial == partial) {
+                    results = listOf(partial)
+                    active = false
+                    recognizer.cancel()
+                }
+            }, PARTIAL_RESULT_FALLBACK_MILLIS)
+        }
+    }
+
+    override fun onPartialResults(partialResults: Bundle?) {
+        latestPartial = partialResults
+            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            ?.firstOrNull { it.isNotBlank() }
+    }
     override fun onEvent(eventType: Int, params: Bundle?) = Unit
+
+    companion object {
+        private const val TAG = "FizzBuzzSpeech"
+        private const val RETRY_DELAY_MILLIS = 250L
+        private const val BUSY_RETRY_DELAY_MILLIS = 650L
+        private const val PARTIAL_RESULT_FALLBACK_MILLIS = 500L
+    }
 }
 
 @Composable

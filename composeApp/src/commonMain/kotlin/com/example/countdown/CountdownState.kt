@@ -44,7 +44,32 @@ fun String.matchesAnswerFor(number: Int): Boolean {
     }
     return normalized.toIntOrNull() == number ||
         englishNumber(normalized) == number ||
-        hebrewNumber(normalized) == number
+        hebrewNumber(normalized) == number ||
+        spokenDigits(normalized) == number
+}
+
+private fun spokenDigits(value: String): Int? {
+    val digitWords = mapOf(
+        "zero" to 0, "זירו" to 0, "אפס" to 0,
+        "one" to 1, "ואן" to 1, "וואן" to 1, "אחד" to 1, "אחת" to 1,
+        "two" to 2, "טו" to 2, "תו" to 2, "שניים" to 2, "שתיים" to 2,
+        "three" to 3, "טרי" to 3, "תרי" to 3, "שלוש" to 3, "שלושה" to 3,
+        "four" to 4, "פור" to 4, "פורר" to 4, "ארבע" to 4, "ארבעה" to 4,
+        "five" to 5, "פייב" to 5, "חמש" to 5, "חמישה" to 5,
+        "six" to 6, "סיקס" to 6, "שש" to 6, "שישה" to 6,
+        "seven" to 7, "סבן" to 7, "שבע" to 7, "שבעה" to 7,
+        "eight" to 8, "אייט" to 8, "איט" to 8, "שמונה" to 8,
+        "nine" to 9, "ניין" to 9, "נין" to 9, "תשע" to 9, "תשעה" to 9,
+    )
+    val words = value.replace('-', ' ').split(' ').filter(String::isNotBlank)
+    if (words.size < 2) return null
+
+    var result = 0
+    for (word in words) {
+        val digit = digitWords[word] ?: return null
+        result = result * 10 + digit
+    }
+    return result
 }
 
 private fun englishNumber(value: String): Int? {
@@ -90,7 +115,7 @@ private fun hebrewNumber(value: String): Int? {
         "עשר" to 10, "עשרה" to 10,
     )
     val tens = mapOf(
-        "עשרים" to 20,
+        "עשרים" to 20, "טוונטי" to 20, "טוונ्टी" to 20, "טווניטי" to 20,
         "שלושים" to 30,
         "ארבעים" to 40,
         "חמישים" to 50,

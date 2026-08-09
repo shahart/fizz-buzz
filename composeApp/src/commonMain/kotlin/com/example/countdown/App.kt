@@ -40,7 +40,8 @@ private val Navy = Color(0xFF102A43)
 private val Sky = Color(0xFFEAF4FF)
 private val Blue = Color(0xFF1473E6)
 private val Red = Color(0xFFD92D20)
-private const val MICROPHONE_SETTLE_MILLIS = 400L
+private const val MICROPHONE_SETTLE_MILLIS = 150L
+private const val RESULT_GRACE_MILLIS = 2_000L
 
 @Composable
 fun App() {
@@ -63,20 +64,35 @@ fun App() {
             delay(MICROPHONE_SETTLE_MILLIS)
             speechRecognizer.startListening()
             try {
+                fun processRecognition(): Boolean {
+                    val alternatives = speechRecognizer.consumeResults() ?: return false
+                    val accepted = alternatives.firstOrNull { it.matchesAnswerFor(state.number) }
+                    val spoken = accepted ?: alternatives.first()
+                    lastHeard = spoken
+                    speechRecognizer.stopListening()
+                    println("Speech recognized for ${state.number}: ${alternatives.joinToString()}")
+                    val next = state.answer(spoken)
+                    state = next
+                    if (next.hasFailed) playTimeoutSound()
+                    return true
+                }
+
                 repeat(STARTING_SECONDS * 10) { step ->
                     delay(100)
-                    speechRecognizer.consumeResult()?.let { spoken ->
-                        lastHeard = spoken
-                        speechRecognizer.stopListening()
-                        println("Speech recognized for ${state.number}: $spoken")
-                        val next = state.answer(spoken)
-                        state = next
-                        if (next.hasFailed) playTimeoutSound()
-                        return@LaunchedEffect
+                    if (processRecognition()) return@LaunchedEffect
+                    if ((step + 1) % 10 == 0 && step + 1 < STARTING_SECONDS * 10) {
+                        state = state.tick()
                     }
-                    if ((step + 1) % 10 == 0) state = state.tick()
                 }
-                if (state.hasTimedOut) playTimeoutSound()
+
+                if (speechRecognizer.hasDetectedSpeech) {
+                    repeat((RESULT_GRACE_MILLIS / 100L).toInt()) {
+                        delay(100)
+                        if (processRecognition()) return@LaunchedEffect
+                    }
+                }
+                state = state.tick()
+                playTimeoutSound()
             } finally {
                 speechRecognizer.stopListening()
             }

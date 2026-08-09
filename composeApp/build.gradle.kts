@@ -53,3 +53,10 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+// Development and production compile-sync tasks share an intermediate Kotlin
+// directory. Keep production Webpack from replacing the import object before
+// development Webpack has consumed its matching Wasm output.
+tasks.named("wasmJsDevelopmentExecutableCompileSync") {
+    mustRunAfter(tasks.named("wasmJsBrowserProductionWebpack"))
+}
