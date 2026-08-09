@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="layout_direction">ltr</string>
     <string name="ready">READY?</string>
     <string name="instructions">Say the number — or BOOM for multiples of 7 and numbers containing 7</string>
     <string name="speech_unavailable">Speech recognition is not available on this device</string>

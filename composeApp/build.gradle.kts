@@ -55,9 +55,19 @@ android {
     }
 }
 
-// Development and production compile-sync tasks share an intermediate Kotlin
-// directory. Keep production Webpack from replacing the import object before
-// development Webpack has consumed its matching Wasm output.
+// Development and production Webpack use the same intermediate Kotlin package.
+// Always refresh that package from the matching executable before bundling;
+// otherwise an up-to-date compile-sync task can leave the other mode's import
+// object behind and Chrome cannot instantiate the Wasm module.
+tasks.named("wasmJsDevelopmentExecutableCompileSync") {
+    outputs.upToDateWhen { false }
+}
+tasks.named("wasmJsProductionExecutableCompileSync") {
+    outputs.upToDateWhen { false }
+}
+
+// When both variants are requested together, let production finish consuming
+// its staging files before development replaces them.
 tasks.named("wasmJsDevelopmentExecutableCompileSync") {
     mustRunAfter(tasks.named("wasmJsBrowserProductionWebpack"))
 }

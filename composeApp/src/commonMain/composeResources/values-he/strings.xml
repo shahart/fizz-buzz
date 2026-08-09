@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="layout_direction">rtl</string>
     <string name="ready">מוכנים?</string>
     <string name="instructions">אמרו את המספר — או בום עבור כפולות של 7 ומספרים שמכילים את הספרה 7</string>
     <string name="speech_unavailable">זיהוי דיבור אינו זמין במכשיר הזה</string>

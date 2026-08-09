@@ -22,6 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -30,13 +31,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fizz_buzz.composeapp.generated.resources.Res
 import fizz_buzz.composeapp.generated.resources.boom
 import fizz_buzz.composeapp.generated.resources.heard
 import fizz_buzz.composeapp.generated.resources.instructions
+import fizz_buzz.composeapp.generated.resources.layout_direction
 import fizz_buzz.composeapp.generated.resources.play_again
 import fizz_buzz.composeapp.generated.resources.ready
 import fizz_buzz.composeapp.generated.resources.say_boom
@@ -59,7 +64,13 @@ private const val RESULT_GRACE_MILLIS = 2_000L
 
 @Composable
 fun App() {
-    MaterialTheme {
+    val layoutDirection = if (stringResource(Res.string.layout_direction) == "rtl") {
+        LayoutDirection.Rtl
+    } else {
+        LayoutDirection.Ltr
+    }
+    CompositionLocalProvider(LocalLayoutDirection provides layoutDirection) {
+        MaterialTheme {
         var started by remember { mutableStateOf(false) }
         var gameId by remember { mutableStateOf(0) }
         var lastHeard by remember(gameId) { mutableStateOf<String?>(null) }
@@ -139,6 +150,7 @@ fun App() {
                         },
                         color = Navy.copy(alpha = 0.7f),
                         fontSize = 16.sp,
+                        textAlign = TextAlign.Center,
                     )
                     Spacer(Modifier.height(32.dp))
                     Button(
@@ -184,6 +196,7 @@ fun App() {
                     },
                     color = if (failed) Color.White else Navy.copy(alpha = 0.7f),
                     fontSize = 16.sp,
+                    textAlign = TextAlign.Center,
                 )
                 lastHeard?.let { spoken ->
                     Spacer(Modifier.height(12.dp))
@@ -192,6 +205,7 @@ fun App() {
                         color = if (failed) Color.White else Navy,
                         fontSize = 18.sp,
                         fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center,
                     )
                 }
                 if (failed) {
@@ -208,6 +222,7 @@ fun App() {
                     }
                 }
             }
+        }
         }
     }
 }

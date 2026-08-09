@@ -7,7 +7,10 @@
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <title>fizz-buzz 7-boom</title>
     <script>
-        if ((navigator.language || "").toLowerCase().startsWith("he")) {
+        const isHebrew = (navigator.language || "").toLowerCase().startsWith("he");
+        document.documentElement.lang = isHebrew ? "he" : "en";
+        document.documentElement.dir = isHebrew ? "rtl" : "ltr";
+        if (isHebrew) {
             document.title = "פיז-באז 7-בום";
         }
     </script>
@@ -17,6 +20,10 @@
     </style>
 </head>
 <body>
-    <script src="composeApp.js"></script>
+    <script>
+        const appScript = document.createElement("script");
+        appScript.src = `composeApp.js?v=${Date.now()}`;
+        document.body.appendChild(appScript);
+    </script>
 </body>
 </html>
