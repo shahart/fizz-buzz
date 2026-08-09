@@ -9,8 +9,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -79,6 +81,13 @@ fun App() {
         }
         val speechRecognizer = rememberSpeechRecognizerController()
 
+        fun submitAnswer(answer: String) {
+            speechRecognizer.stopListening()
+            val next = state.answer(answer)
+            state = next
+            if (next.hasFailed) playTimeoutSound()
+        }
+
         LaunchedEffect(started, gameId, state.number, state.isFinished) {
             if (!started || state.isFinished) {
                 speechRecognizer.stopListening()
@@ -87,7 +96,7 @@ fun App() {
 
             // Let the previous utterance finish so it is not captured as the next answer.
             delay(MICROPHONE_SETTLE_MILLIS)
-            speechRecognizer.startListening()
+            if (speechRecognizer.isSupported) speechRecognizer.startListening()
             try {
                 fun processRecognition(): Boolean {
                     val alternatives = speechRecognizer.consumeResults() ?: return false
@@ -96,9 +105,7 @@ fun App() {
                     lastHeard = spoken
                     speechRecognizer.stopListening()
                     println("Speech recognized for ${state.number}: ${alternatives.joinToString()}")
-                    val next = state.answer(spoken)
-                    state = next
-                    if (next.hasFailed) playTimeoutSound()
+                    submitAnswer(spoken)
                     return true
                 }
 
@@ -134,38 +141,41 @@ fun App() {
         val background = if (failed) Red.copy(alpha = flashAlpha) else Sky
 
         Surface(modifier = Modifier.fillMaxSize(), color = background) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                if (!started) {
-                    Text(stringResource(Res.string.ready), color = Navy, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        text = if (speechRecognizer.isSupported) {
-                            stringResource(Res.string.instructions)
-                        } else {
-                            stringResource(Res.string.speech_unavailable)
-                        },
-                        color = Navy.copy(alpha = 0.7f),
-                        fontSize = 16.sp,
-                        textAlign = TextAlign.Center,
-                    )
-                    Spacer(Modifier.height(32.dp))
-                    Button(
-                        onClick = {
-                            prepareTimeoutSound()
-                            started = true
-                        },
-                        enabled = speechRecognizer.isSupported,
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Blue),
-                    ) {
-                        Text(stringResource(Res.string.start_game), modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp)
+                        .padding(bottom = if (started && !failed) 92.dp else 0.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    if (!started) {
+                        Text(stringResource(Res.string.ready), color = Navy, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            text = if (speechRecognizer.isSupported) {
+                                stringResource(Res.string.instructions)
+                            } else {
+                                stringResource(Res.string.speech_unavailable)
+                            },
+                            color = Navy.copy(alpha = 0.7f),
+                            fontSize = 16.sp,
+                            textAlign = TextAlign.Center,
+                        )
+                        Spacer(Modifier.height(32.dp))
+                        Button(
+                            onClick = {
+                                prepareTimeoutSound()
+                                started = true
+                            },
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Blue),
+                        ) {
+                            Text(stringResource(Res.string.start_game), modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+                        }
+                        return@Column
                     }
-                    return@Column
-                }
 
                 Text(
                     text = if (failed) stringResource(Res.string.boom) else stringResource(Res.string.say_it_now),
@@ -219,6 +229,39 @@ fun App() {
                         colors = ButtonDefaults.buttonColors(containerColor = Blue),
                     ) {
                         Text(stringResource(Res.string.play_again), modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+                    }
+                }
+                }
+                if (started && !failed) {
+                    Row(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 20.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    ) {
+                        Button(
+                            onClick = {
+                                lastHeard = null
+                                submitAnswer("boom")
+                            },
+                            modifier = Modifier.weight(1f).height(64.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Red),
+                        ) {
+                            Text("💣", fontSize = 30.sp)
+                        }
+                        Button(
+                            onClick = {
+                                lastHeard = null
+                                submitAnswer(state.number.toString())
+                            },
+                            modifier = Modifier.weight(1f).height(64.dp),
+                            shape = RoundedCornerShape(18.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = Blue),
+                        ) {
+                            Text(state.number.toString(), fontSize = 28.sp, fontWeight = FontWeight.Black)
+                        }
                     }
                 }
             }

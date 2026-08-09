@@ -2,8 +2,8 @@
 <resources>
     <string name="layout_direction">rtl</string>
     <string name="ready">מוכנים?</string>
-    <string name="instructions">אמרו את המספר — או בום עבור כפולות של 7 ומספרים שמכילים את הספרה 7</string>
-    <string name="speech_unavailable">זיהוי דיבור אינו זמין במכשיר הזה</string>
+    <string name="instructions">אמרו או לחצו על המספר — השתמשו בבום עבור כפולות של 7 ומספרים שמכילים את הספרה 7</string>
+    <string name="speech_unavailable">זיהוי דיבור אינו זמין במכשיר הזה — אפשר לשחק בעזרת הכפתורים</string>
     <string name="start_game">התחלת משחק</string>
     <string name="boom">בום</string>
     <string name="say_it_now">אמרו עכשיו</string>
