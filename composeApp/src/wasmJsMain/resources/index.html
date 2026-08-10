@@ -20,6 +20,19 @@
     </style>
 </head>
 <body>
+    <script src="firebase-config.js"></script>
+    <script type="module">
+        const firebaseConfig = globalThis.firebaseConfig;
+        if (firebaseConfig?.apiKey && firebaseConfig?.appId && firebaseConfig?.measurementId) {
+            const [{ initializeApp }, { getAnalytics, isSupported }] = await Promise.all([
+                import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
+                import("https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js"),
+            ]);
+            if (await isSupported()) {
+                getAnalytics(initializeApp(firebaseConfig));
+            }
+        }
+    </script>
     <script>
         const appScript = document.createElement("script");
         appScript.src = `composeApp.js?v=${Date.now()}`;

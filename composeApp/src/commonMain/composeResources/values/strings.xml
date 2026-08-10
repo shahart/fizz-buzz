@@ -2,6 +2,8 @@
 <resources>
     <string name="layout_direction">ltr</string>
     <string name="ready">READY?</string>
+    <string name="choose_nickname">Your emoji nickname</string>
+    <string name="choose_emoji">Choose an emoji</string>
     <string name="instructions">Say or tap the number — use BOOM 💣 for multiples of 7 and numbers containing 7</string>
     <string name="speech_unavailable">Speech recognition is not available on this device — use the buttons to play</string>
     <string name="start_game">Start game</string>
@@ -20,10 +22,14 @@
     <string name="waiting">Waiting</string>
     <string name="your_turn">Your turn</string>
     <string name="connected_players">%1$d players connected</string>
+    <string name="roster_active_turn">Blue ring: active turn</string>
+    <string name="roster_loading">Loading players…</string>
+    <string name="dismiss_roster">Close</string>
     <string name="record">Record: %1$d</string>
     <string name="highest_response_time">Highest response time: %1$s seconds</string>
     <string name="average_response_time">Average response time: %1$s seconds</string>
     <string name="response_time_rank">Response-time rank: %1$d of %2$d</string>
     <string name="response_time_unranked">Response-time rank: —</string>
+    <string name="winner">Winner:</string>
     <string name="latency">Latency: %1$s ms</string>
 </resources>

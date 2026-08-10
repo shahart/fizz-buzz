@@ -3,6 +3,17 @@ package com.shahartal.fizzbuzz
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
+val EMOJI_NICKNAMES = listOf(
+    "😀", "😎", "🥳", "🤩", "😂", "😊",
+    "🦊", "🐼", "🐸", "🦁", "🐵", "🐙",
+    "🦄", "🐲", "🦖", "🐝", "🦋", "🐳",
+    "🚀", "⚡", "🔥", "🌈", "⭐", "🌙",
+)
+
+const val DEFAULT_EMOJI_NICKNAME = "😀"
+
+fun isEmojiNickname(value: String): Boolean = value in EMOJI_NICKNAMES
+
 @Serializable
 enum class GamePhase {
     @SerialName("active") ACTIVE,
@@ -37,6 +48,20 @@ data class ResponseRanking(
     val sessionId: String,
     val rank: Int,
     val averageMillis: Long,
+    val nickname: String? = null,
+)
+
+@Serializable
+data class RosterPlayer(
+    val sessionId: String,
+    val nickname: String,
+)
+
+@Serializable
+data class GameRoster(
+    val type: String,
+    val revision: Long,
+    val players: List<RosterPlayer>,
 )
 
 @Serializable
@@ -52,11 +77,18 @@ fun GameSnapshot.responseRank(sessionId: String): Pair<Int, Int>? {
     return mine.rank to rankings.size
 }
 
+fun GameSnapshot.winningNicknames(): List<String> =
+    if (phase != GamePhase.GAME_OVER) emptyList() else responseRankings.orEmpty()
+        .filter { it.rank == 1 }
+        .mapNotNull { it.nickname?.takeIf(::isEmojiNickname) }
+        .distinct()
+
 enum class ConnectionStatus { IDLE, JOINING, CONNECTED, RECONNECTING, REJOIN }
 
 data class GameUiState(
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
     val snapshot: GameSnapshot? = null,
+    val roster: GameRoster? = null,
     val serverClockOffsetMillis: Long = 0,
     val responseTimeTotalMillis: Long = 0,
     val responseCount: Int = 0,
@@ -127,6 +159,18 @@ data class GameUiState(
             responseCount = if (startsNewPlay) 0 else responseCount,
             bestNumber = maxOf(bestNumber, correctlyAnsweredNumber ?: 0),
         )
+    }
+
+    fun reduce(next: GameRoster): GameUiState {
+        val snapshotRevision = snapshot?.revision ?: -1
+        val rosterRevision = roster?.revision ?: -1
+        if (
+            next.type != "roster" ||
+            next.revision < snapshotRevision ||
+            next.revision < rosterRevision ||
+            next.players.any { !isEmojiNickname(it.nickname) }
+        ) return this
+        return copy(roster = next)
     }
 }
 

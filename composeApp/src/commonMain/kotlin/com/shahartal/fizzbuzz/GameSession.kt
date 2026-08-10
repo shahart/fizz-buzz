@@ -29,6 +29,7 @@ class GameSession(
     private val scope: CoroutineScope,
     private val client: HttpClient = createGameHttpClient(),
     val sessionId: String = anonymousSessionId(),
+    val nickname: String,
     initialBestNumber: Int = 0,
     initialHighestResponseTimeMillis: Long = 0,
 ) {
@@ -112,7 +113,7 @@ class GameSession(
                 delay(reconnectDelayMillis(attempt - 1))
             }
             try {
-                client.webSocket(gameWebSocketUrl(sessionId)) {
+                client.webSocket(gameWebSocketUrl(sessionId, nickname)) {
                     connection = this
                     attempt = 0
                     val socket = this
@@ -135,6 +136,10 @@ class GameSession(
                                 "snapshot" -> {
                                     val snapshot = json.decodeFromString<GameSnapshot>(raw)
                                     mutableState.value = mutableState.value.reduce(snapshot, currentTimeMillis(), sessionId)
+                                }
+                                "roster" -> {
+                                    val roster = json.decodeFromString<GameRoster>(raw)
+                                    mutableState.value = mutableState.value.reduce(roster)
                                 }
                                 "pong" -> {
                                     val pong = json.decodeFromString<PongMessage>(raw)

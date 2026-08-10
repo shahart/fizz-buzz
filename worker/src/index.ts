@@ -1,9 +1,20 @@
 import { DurableObject } from "cloudflare:workers";
-import { Answer, GameEngine, GameState, initialState, Player, ResponseRanking, TURN_MILLIS } from "./game-engine";
+import {
+  Answer,
+  DEFAULT_EMOJI_NICKNAME,
+  GameEngine,
+  GameState,
+  initialState,
+  isEmojiNickname,
+  Player,
+  ResponseRanking,
+  TURN_MILLIS,
+} from "./game-engine";
 
 interface SocketAttachment {
   sessionId: string;
   connectionId: string;
+  nickname: string;
 }
 
 interface ClientAnswerMessage {
@@ -30,6 +41,12 @@ interface Snapshot {
   responseRankings?: ResponseRanking[];
 }
 
+interface RosterMessage {
+  type: "roster";
+  revision: number;
+  players: Array<{ sessionId: string; nickname: string }>;
+}
+
 export class GlobalGame extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
@@ -50,6 +67,7 @@ export class GlobalGame extends DurableObject<Env> {
         );
         CREATE TABLE IF NOT EXISTS roster (
           session_id TEXT PRIMARY KEY,
+          nickname TEXT NOT NULL DEFAULT '😀',
           join_order INTEGER NOT NULL UNIQUE,
           response_time_total_millis INTEGER NOT NULL DEFAULT 0,
           response_count INTEGER NOT NULL DEFAULT 0
@@ -66,6 +84,9 @@ export class GlobalGame extends DurableObject<Env> {
       if (!rosterColumns.some((column) => column.name === "response_count")) {
         this.ctx.storage.sql.exec("ALTER TABLE roster ADD COLUMN response_count INTEGER NOT NULL DEFAULT 0");
       }
+      if (!rosterColumns.some((column) => column.name === "nickname")) {
+        this.ctx.storage.sql.exec("ALTER TABLE roster ADD COLUMN nickname TEXT NOT NULL DEFAULT '😀'");
+      }
       const existing = this.ctx.storage.sql.exec("SELECT singleton FROM game_state WHERE singleton = 1").toArray();
       if (existing.length === 0) this.persist(initialState(), []);
     });
@@ -74,17 +95,19 @@ export class GlobalGame extends DurableObject<Env> {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const sessionId = url.searchParams.get("sessionId");
+    const nickname = parseNickname(url.searchParams.get("nickname"));
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     }
     if (sessionId === null || !isSessionId(sessionId)) {
       return new Response("A valid sessionId is required", { status: 400 });
     }
+    if (nickname === null) return new Response("A valid emoji nickname is required", { status: 400 });
 
     const pair = new WebSocketPair();
     const [client, server] = Object.values(pair);
     const connectionId = crypto.randomUUID();
-    server.serializeAttachment({ sessionId, connectionId } satisfies SocketAttachment);
+    server.serializeAttachment({ sessionId, connectionId, nickname } satisfies SocketAttachment);
     this.ctx.acceptWebSocket(server);
 
     for (const socket of this.ctx.getWebSockets()) {
@@ -110,7 +133,7 @@ export class GlobalGame extends DurableObject<Env> {
         changed = engine.leave(player.sessionId, now).changed || changed;
       }
     }
-    const mutation = engine.join(sessionId, now);
+    const mutation = engine.join(sessionId, now, nickname);
     changed = mutation.changed || changed;
     if (changed) {
       this.persist(engine.state, engine.players);
@@ -138,7 +161,7 @@ export class GlobalGame extends DurableObject<Env> {
     const mutation = parsed.type === "answer"
       ? engine.answer(attachment.sessionId, parsed.turnId, parsed.answer, now, parsed.responseTimeMillis)
       : parsed.type === "restart"
-        ? engine.restart(attachment.sessionId, now)
+        ? engine.restart(attachment.sessionId, now, attachment.nickname)
         : engine.leave(attachment.sessionId, now);
 
     if (mutation.changed) {
@@ -203,11 +226,12 @@ export class GlobalGame extends DurableObject<Env> {
       lastJoinOrder: row.last_join_order,
     };
     const players = this.ctx.storage.sql.exec<{
-      session_id: string; join_order: number; response_time_total_millis: number; response_count: number;
+      session_id: string; nickname: string; join_order: number; response_time_total_millis: number; response_count: number;
     }>(
-      "SELECT session_id, join_order, response_time_total_millis, response_count FROM roster ORDER BY join_order",
+      "SELECT session_id, nickname, join_order, response_time_total_millis, response_count FROM roster ORDER BY join_order",
     ).toArray().map((player): Player => ({
       sessionId: player.session_id,
+      nickname: isEmojiNickname(player.nickname) ? player.nickname : DEFAULT_EMOJI_NICKNAME,
       joinOrder: player.join_order,
       responseTimeTotalMillis: player.response_time_total_millis,
       responseCount: player.response_count,
@@ -232,8 +256,8 @@ export class GlobalGame extends DurableObject<Env> {
       sql.exec("DELETE FROM roster");
       for (const player of players) {
         sql.exec(
-          "INSERT INTO roster(session_id, join_order, response_time_total_millis, response_count) VALUES(?, ?, ?, ?)",
-          player.sessionId, player.joinOrder, player.responseTimeTotalMillis, player.responseCount,
+          "INSERT INTO roster(session_id, nickname, join_order, response_time_total_millis, response_count) VALUES(?, ?, ?, ?, ?)",
+          player.sessionId, player.nickname, player.joinOrder, player.responseTimeTotalMillis, player.responseCount,
         );
       }
     });
@@ -245,14 +269,18 @@ export class GlobalGame extends DurableObject<Env> {
   }
 
   private broadcast(engine: GameEngine): void {
-    const message = JSON.stringify(this.snapshot(engine));
+    const snapshotMessage = JSON.stringify(this.snapshot(engine));
+    const rosterMessage = JSON.stringify(this.roster(engine));
     const activeSessions = new Set(engine.players.map((player) => player.sessionId));
     for (const socket of this.ctx.getWebSockets()) {
       const attachment = attachmentOf(socket);
       if (engine.state.phase === "active" && (attachment === null || !activeSessions.has(attachment.sessionId))) {
         continue;
       }
-      try { socket.send(message); } catch (error) {
+      try {
+        socket.send(snapshotMessage);
+        socket.send(rosterMessage);
+      } catch (error) {
         console.warn(JSON.stringify({ event: "snapshot_send_failed", error: String(error) }));
       }
     }
@@ -260,6 +288,7 @@ export class GlobalGame extends DurableObject<Env> {
 
   private sendSnapshot(socket: WebSocket, engine: GameEngine): void {
     socket.send(JSON.stringify(this.snapshot(engine)));
+    socket.send(JSON.stringify(this.roster(engine)));
   }
 
   private snapshot(engine: GameEngine): Snapshot {
@@ -278,6 +307,14 @@ export class GlobalGame extends DurableObject<Env> {
     if (engine.state.failedSessionId !== null) snapshot.failedSessionId = engine.state.failedSessionId;
     if (engine.state.phase === "gameOver") snapshot.responseRankings = engine.responseRankings();
     return snapshot;
+  }
+
+  private roster(engine: GameEngine): RosterMessage {
+    return {
+      type: "roster",
+      revision: engine.state.revision,
+      players: engine.players.map(({ sessionId, nickname }) => ({ sessionId, nickname })),
+    };
   }
 
   private isCurrentConnection(attachment: SocketAttachment): boolean {
@@ -300,12 +337,23 @@ function attachmentOf(socket: WebSocket): SocketAttachment | null {
   if (typeof value !== "object" || value === null) return null;
   const candidate = value as Record<string, unknown>;
   return typeof candidate.sessionId === "string" && typeof candidate.connectionId === "string"
-    ? { sessionId: candidate.sessionId, connectionId: candidate.connectionId }
+    ? {
+        sessionId: candidate.sessionId,
+        connectionId: candidate.connectionId,
+        nickname: typeof candidate.nickname === "string" && isEmojiNickname(candidate.nickname)
+          ? candidate.nickname
+          : DEFAULT_EMOJI_NICKNAME,
+      }
     : null;
 }
 
 function isSessionId(value: string): boolean {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function parseNickname(value: string | null): string | null {
+  if (value === null) return DEFAULT_EMOJI_NICKNAME;
+  return isEmojiNickname(value) ? value : null;
 }
 
 function parseClientMessage(raw: string): ClientMessage | null {
@@ -353,6 +401,9 @@ export default {
       }
       if (!isSessionId(url.searchParams.get("sessionId") ?? "")) {
         return new Response("A valid sessionId is required", { status: 400 });
+      }
+      if (parseNickname(url.searchParams.get("nickname")) === null) {
+        return new Response("A valid emoji nickname is required", { status: 400 });
       }
       return env.GLOBAL_GAME.getByName("global").fetch(request);
     }

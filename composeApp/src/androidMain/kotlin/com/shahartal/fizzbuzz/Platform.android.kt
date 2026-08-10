@@ -1,5 +1,6 @@
 package com.shahartal.fizzbuzz
 
+import android.net.Uri
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -15,8 +16,12 @@ import java.util.UUID
 actual fun createGameHttpClient(): HttpClient = HttpClient(OkHttp) { install(WebSockets) }
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
 actual fun anonymousSessionId(): String = UUID.randomUUID().toString()
-actual fun gameWebSocketUrl(sessionId: String): String =
-    "${BuildConfig.GAME_WORKER_URL}?sessionId=$sessionId"
+actual fun gameWebSocketUrl(sessionId: String, nickname: String): String =
+    Uri.parse(BuildConfig.GAME_WORKER_URL).buildUpon()
+        .appendQueryParameter("sessionId", sessionId)
+        .appendQueryParameter("nickname", nickname)
+        .build()
+        .toString()
 
 @Composable
 actual fun rememberBestNumberStore(): BestNumberStore {
@@ -37,6 +42,13 @@ actual fun rememberBestNumberStore(): BestNumberStore {
                 if (value > loadHighestResponseTimeMillis()) {
                     preferences.edit().putLong("highest_response_time_millis", value).apply()
                 }
+            }
+
+            override fun loadNickname(): String? =
+                preferences.getString("nickname_emoji", null)?.takeIf(::isEmojiNickname)
+
+            override fun saveNickname(value: String) {
+                if (isEmojiNickname(value)) preferences.edit().putString("nickname_emoji", value).apply()
             }
         }
     }

@@ -6,23 +6,34 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -48,7 +59,10 @@ import androidx.compose.ui.unit.sp
 import fizz_buzz.composeapp.generated.resources.Res
 import fizz_buzz.composeapp.generated.resources.average_response_time
 import fizz_buzz.composeapp.generated.resources.boom
+import fizz_buzz.composeapp.generated.resources.choose_emoji
+import fizz_buzz.composeapp.generated.resources.choose_nickname
 import fizz_buzz.composeapp.generated.resources.connected_players
+import fizz_buzz.composeapp.generated.resources.dismiss_roster
 import fizz_buzz.composeapp.generated.resources.instructions
 import fizz_buzz.composeapp.generated.resources.highest_response_time
 import fizz_buzz.composeapp.generated.resources.join_game
@@ -57,6 +71,8 @@ import fizz_buzz.composeapp.generated.resources.layout_direction
 import fizz_buzz.composeapp.generated.resources.latency
 import fizz_buzz.composeapp.generated.resources.noto_sans_hebrew
 import fizz_buzz.composeapp.generated.resources.play_again
+import fizz_buzz.composeapp.generated.resources.roster_active_turn
+import fizz_buzz.composeapp.generated.resources.roster_loading
 import fizz_buzz.composeapp.generated.resources.ready
 import fizz_buzz.composeapp.generated.resources.record
 import fizz_buzz.composeapp.generated.resources.reconnecting
@@ -68,6 +84,7 @@ import fizz_buzz.composeapp.generated.resources.someone_else_wrong_answer
 import fizz_buzz.composeapp.generated.resources.speech_unavailable
 import fizz_buzz.composeapp.generated.resources.time_is_up
 import fizz_buzz.composeapp.generated.resources.waiting
+import fizz_buzz.composeapp.generated.resources.winner
 import fizz_buzz.composeapp.generated.resources.wrong_answer
 import fizz_buzz.composeapp.generated.resources.your_turn
 import kotlinx.coroutines.delay
@@ -118,9 +135,15 @@ private fun fizzBuzzTypography(): Typography {
 private fun MultiplayerGame() {
     val scope = rememberCoroutineScope()
     val bestNumberStore = rememberBestNumberStore()
-    val session = remember(bestNumberStore) {
+    var nickname by remember(bestNumberStore) {
+        mutableStateOf(bestNumberStore.loadNickname()?.takeIf(::isEmojiNickname))
+    }
+    var showNicknamePicker by remember { mutableStateOf(nickname == null) }
+    var showRoster by remember { mutableStateOf(false) }
+    val session = remember(bestNumberStore, nickname) {
         GameSession(
             scope,
+            nickname = nickname ?: DEFAULT_EMOJI_NICKNAME,
             initialBestNumber = bestNumberStore.load(),
             initialHighestResponseTimeMillis = bestNumberStore.loadHighestResponseTimeMillis(),
         )
@@ -132,6 +155,7 @@ private fun MultiplayerGame() {
     var now by remember { mutableLongStateOf(currentTimeMillis()) }
     var soundedRevision by remember { mutableLongStateOf(-1) }
     var temporaryFailureBlink by remember { mutableStateOf(false) }
+    val contentScrollState = rememberScrollState()
     val activeTurn = uiState.isActiveTurn(session.sessionId)
 
     LaunchedEffect(uiState.bestNumber) {
@@ -201,6 +225,10 @@ private fun MultiplayerGame() {
         }
     }
 
+    LaunchedEffect(snapshot?.phase) {
+        if (snapshot?.phase == GamePhase.ACTIVE) contentScrollState.scrollTo(0)
+    }
+
     val failed = snapshot?.phase == GamePhase.GAME_OVER && snapshot.gameOverReason != GameOverReason.NO_PLAYERS
     val currentPlayerFailed = failed && snapshot.failedSessionId == session.sessionId
     val shouldBlink = currentPlayerFailed || temporaryFailureBlink
@@ -216,55 +244,103 @@ private fun MultiplayerGame() {
         failed -> Red
         else -> Sky
     }
+    val gameOver = snapshot?.phase == GamePhase.GAME_OVER
 
     Surface(modifier = Modifier.fillMaxSize(), color = background) {
         Box(Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(24.dp).padding(bottom = 92.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
+            BoxWithConstraints(
+                modifier = Modifier.fillMaxSize().padding(bottom = if (gameOver) 0.dp else 92.dp),
             ) {
-                when (uiState.connectionStatus) {
-                    ConnectionStatus.IDLE, ConnectionStatus.REJOIN -> JoinPanel(
-                        speechSupported = speech.isSupported,
-                        rejoin = uiState.connectionStatus == ConnectionStatus.REJOIN,
-                        onJoin = { prepareTimeoutSound(); lastHeard = null; session.join() },
-                    )
-                    ConnectionStatus.JOINING -> StatusText(stringResource(Res.string.joining))
-                    ConnectionStatus.RECONNECTING -> StatusText(stringResource(Res.string.reconnecting))
-                    ConnectionStatus.CONNECTED -> if (snapshot != null) GamePanel(
-                        snapshot = snapshot,
-                        sessionId = session.sessionId,
-                        activeTurn = activeTurn,
-                        seconds = uiState.secondsRemaining(now),
-                        averageResponseTime = uiState.averageResponseTimeText(session.sessionId),
-                        latencyMillis = uiState.latencyMillis,
-                        bestNumber = uiState.bestNumber,
-                        highestResponseTime = uiState.highestResponseTimeText(),
-                        lastHeard = lastHeard,
-                        onRestart = session::restart,
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(contentScrollState)
+                        .heightIn(min = maxHeight)
+                        .padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    when (uiState.connectionStatus) {
+                        ConnectionStatus.IDLE, ConnectionStatus.REJOIN -> JoinPanel(
+                            speechSupported = speech.isSupported,
+                            rejoin = uiState.connectionStatus == ConnectionStatus.REJOIN,
+                            nickname = nickname,
+                            onChooseNickname = { showNicknamePicker = true },
+                            onJoin = { prepareTimeoutSound(); lastHeard = null; session.join() },
+                        )
+                        ConnectionStatus.JOINING -> StatusText(stringResource(Res.string.joining))
+                        ConnectionStatus.RECONNECTING -> StatusText(stringResource(Res.string.reconnecting))
+                        ConnectionStatus.CONNECTED -> if (snapshot != null) GamePanel(
+                            snapshot = snapshot,
+                            sessionId = session.sessionId,
+                            activeTurn = activeTurn,
+                            seconds = uiState.secondsRemaining(now),
+                            averageResponseTime = uiState.averageResponseTimeText(session.sessionId),
+                            latencyMillis = uiState.latencyMillis,
+                            bestNumber = uiState.bestNumber,
+                            highestResponseTime = uiState.highestResponseTimeText(),
+                            lastHeard = lastHeard,
+                            onRestart = session::restart,
+                            onShowRoster = { showRoster = true },
+                        )
+                    }
                 }
             }
 
-            AnswerButtons(
-                enabled = activeTurn,
-                number = snapshot?.number ?: 1,
-                onBoom = { lastHeard = null; snapshot?.turnId?.let(session::submitBoom) },
-                onNumber = {
-                    lastHeard = null
-                    snapshot?.turnId?.let { session.submitNumber(it, snapshot.number) }
+            if (!gameOver) {
+                AnswerButtons(
+                    enabled = activeTurn,
+                    number = snapshot?.number ?: 1,
+                    onBoom = { lastHeard = null; snapshot?.turnId?.let(session::submitBoom) },
+                    onNumber = {
+                        lastHeard = null
+                        snapshot?.turnId?.let { session.submitNumber(it, snapshot.number) }
+                    },
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+            }
+        }
+
+        if (showNicknamePicker) {
+            EmojiNicknamePicker(
+                selected = nickname,
+                onSelect = { selected ->
+                    bestNumberStore.saveNickname(selected)
+                    nickname = selected
+                    showNicknamePicker = false
                 },
-                modifier = Modifier.align(Alignment.BottomCenter),
+                onDismiss = { if (nickname != null) showNicknamePicker = false },
+            )
+        }
+        if (showRoster && snapshot != null) {
+            PlayerRosterDialog(
+                snapshot = snapshot,
+                roster = uiState.roster?.takeIf { it.revision == snapshot.revision },
+                onDismiss = { showRoster = false },
             )
         }
     }
 }
 
 @Composable
-private fun JoinPanel(speechSupported: Boolean, rejoin: Boolean, onJoin: () -> Unit) {
+private fun JoinPanel(
+    speechSupported: Boolean,
+    rejoin: Boolean,
+    nickname: String?,
+    onChooseNickname: () -> Unit,
+    onJoin: () -> Unit,
+) {
     Text(stringResource(Res.string.ready), color = Navy, fontSize = 32.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(16.dp))
+    Text(stringResource(Res.string.choose_nickname), color = Navy.copy(alpha = .7f), fontSize = 15.sp)
+    TextButton(onClick = onChooseNickname, shape = RoundedCornerShape(14.dp)) {
+        if (nickname == null) {
+            Text(stringResource(Res.string.choose_emoji), fontSize = 18.sp)
+        } else {
+            EmojiNicknameSymbol(nickname, fontSize = 44.sp)
+        }
+    }
+    Spacer(Modifier.height(10.dp))
     Text(
         platformSupportedText(
             if (speechSupported) stringResource(Res.string.instructions) else stringResource(Res.string.speech_unavailable),
@@ -272,14 +348,99 @@ private fun JoinPanel(speechSupported: Boolean, rejoin: Boolean, onJoin: () -> U
         color = Navy.copy(alpha = 0.7f), fontSize = 16.sp, textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(32.dp))
-    Button(onClick = onJoin, shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+    Button(
+        onClick = onJoin,
+        enabled = nickname != null,
+        shape = RoundedCornerShape(14.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Blue),
+    ) {
         Text(stringResource(if (rejoin) Res.string.rejoin_game else Res.string.join_game), Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
     }
 }
 
 @Composable
+private fun EmojiNicknamePicker(selected: String?, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.choose_emoji), fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                EMOJI_NICKNAMES.chunked(6).forEach { emojis ->
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                        emojis.forEach { emoji ->
+                            TextButton(
+                                onClick = { onSelect(emoji) },
+                                modifier = Modifier.size(48.dp),
+                                shape = CircleShape,
+                                contentPadding = PaddingValues(0.dp),
+                                colors = ButtonDefaults.textButtonColors(
+                                    containerColor = if (emoji == selected) Blue.copy(alpha = .15f) else Color.Transparent,
+                                ),
+                            ) {
+                                EmojiNicknameSymbol(emoji, fontSize = 22.sp)
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+    )
+}
+
+@Composable
 private fun StatusText(text: String) {
     Text(text, color = Navy, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+}
+
+@Composable
+private fun PlayerRosterDialog(snapshot: GameSnapshot, roster: GameRoster?, onDismiss: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.connected_players, snapshot.connectedPlayers), fontWeight = FontWeight.Bold) },
+        text = {
+            if (roster == null) {
+                Text(stringResource(Res.string.roster_loading), color = Navy.copy(alpha = .7f))
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(56.dp),
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 336.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(roster.players, key = { it.sessionId }) { player ->
+                            val isActive = snapshot.phase == GamePhase.ACTIVE &&
+                                player.sessionId == snapshot.activeSessionId
+                            Box(
+                                modifier = Modifier
+                                    .size(56.dp)
+                                    .then(if (isActive) Modifier.border(3.dp, Blue, CircleShape) else Modifier)
+                                    .padding(6.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                EmojiNicknameSymbol(player.nickname, fontSize = 30.sp)
+                            }
+                        }
+                    }
+                    if (
+                        snapshot.phase == GamePhase.ACTIVE &&
+                        roster.players.any { it.sessionId == snapshot.activeSessionId }
+                    ) {
+                        Text(
+                            stringResource(Res.string.roster_active_turn),
+                            color = Blue,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.dismiss_roster)) }
+        },
+    )
 }
 
 @Composable
@@ -294,6 +455,7 @@ private fun GamePanel(
     highestResponseTime: String,
     lastHeard: String?,
     onRestart: () -> Unit,
+    onShowRoster: () -> Unit,
 ) {
     val failed = snapshot.phase == GamePhase.GAME_OVER
     if (failed) {
@@ -309,6 +471,25 @@ private fun GamePanel(
                 fontWeight = FontWeight.Black,
             )
         }
+        val winners = snapshot.winningNicknames()
+        if (winners.isNotEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    stringResource(Res.string.winner),
+                    color = Color.White,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                )
+                winners.forEach { winner ->
+                    EmojiNicknameSymbol(winner, fontSize = 30.sp, color = Color.White)
+                }
+            }
+        }
     } else {
         Text(
             text = stringResource(if (activeTurn) Res.string.your_turn else Res.string.waiting),
@@ -318,7 +499,12 @@ private fun GamePanel(
         )
     }
     Spacer(Modifier.height(14.dp))
-    Text(stringResource(Res.string.connected_players, snapshot.connectedPlayers), color = if (failed) Color.White else Navy.copy(alpha = .65f))
+    TextButton(onClick = onShowRoster, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+        Text(
+            stringResource(Res.string.connected_players, snapshot.connectedPlayers),
+            color = if (failed) Color.White else Navy.copy(alpha = .65f),
+        )
+    }
     Spacer(Modifier.height(18.dp))
     Box(Modifier.size(190.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
         Text(snapshot.number.toString(), color = Navy, fontSize = 72.sp, fontWeight = FontWeight.Black)

@@ -30,6 +30,30 @@ class GameProtocolTest {
     }
 
     @Test
+    fun decodesRosterAndPreservesDuplicatePlayersInOrder() {
+        val roster = Json.decodeFromString<GameRoster>(
+            """{"type":"roster","revision":4,"players":[{"sessionId":"a","nickname":"🚀"},{"sessionId":"b","nickname":"🚀"}]}""",
+        )
+        val reduced = GameUiState(snapshot = active).reduce(roster)
+
+        assertEquals(listOf("a", "b"), reduced.roster?.players?.map { it.sessionId })
+        assertEquals(listOf("🚀", "🚀"), reduced.roster?.players?.map { it.nickname })
+    }
+
+    @Test
+    fun rosterReducerRequiresCurrentRevisionAndValidEmojiNicknames() {
+        val current = GameRoster("roster", revision = 4, players = listOf(RosterPlayer("a", "🦊")))
+        val state = GameUiState(snapshot = active).reduce(current)
+
+        assertEquals(state, state.reduce(current.copy(revision = 3, players = emptyList())))
+        assertEquals(
+            state,
+            state.reduce(current.copy(revision = 5, players = listOf(RosterPlayer("a", "not-an-emoji")))),
+        )
+        assertEquals(5, state.reduce(current.copy(revision = 5)).roster?.revision)
+    }
+
+    @Test
     fun identifiesWhetherAnotherPlayerCausedGameOver() {
         val failed = active.copy(
             phase = GamePhase.GAME_OVER,
@@ -45,8 +69,8 @@ class GameProtocolTest {
     @Test
     fun findsTheCurrentPlayersResponseRankOnlyAtGameOver() {
         val rankings = listOf(
-            ResponseRanking("b", rank = 1, averageMillis = 1_200),
-            ResponseRanking("a", rank = 2, averageMillis = 1_800),
+            ResponseRanking("b", rank = 1, averageMillis = 1_200, nickname = "🐼"),
+            ResponseRanking("a", rank = 2, averageMillis = 1_800, nickname = "🦊"),
         )
         assertNull(active.copy(responseRankings = rankings).responseRank("a"))
         assertEquals(
@@ -59,6 +83,21 @@ class GameProtocolTest {
             snapshot = active.copy(phase = GamePhase.GAME_OVER, responseRankings = rankings),
         )
         assertEquals("1.8", finished.averageResponseTimeText("a"))
+        assertEquals(listOf("🐼"), finished.snapshot?.winningNicknames())
+    }
+
+    @Test
+    fun nicknameMustComeFromTheEmojiChooser() {
+        assertTrue(isEmojiNickname("🚀"))
+        assertFalse(isEmojiNickname("Shahar"))
+        assertFalse(isEmojiNickname("🚀🚀"))
+        assertEquals(
+            emptyList(),
+            active.copy(
+                phase = GamePhase.GAME_OVER,
+                responseRankings = listOf(ResponseRanking("a", rank = 1, averageMillis = 1_000)),
+            ).winningNicknames(),
+        )
     }
 
     @Test

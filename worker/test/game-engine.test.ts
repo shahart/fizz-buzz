@@ -28,8 +28,8 @@ describe("global game rules", () => {
 
   it("gives the newest newcomer the next turn then resumes join order", () => {
     const engine = game();
-    engine.join("a", 0);
-    engine.join("b", 1);
+    engine.join("a", 0, "🦊");
+    engine.join("b", 1, "🐼");
     engine.join("c", 2);
     engine.answer("a", engine.state.turnId!, { type: "number", value: 1 }, 3);
     expect(engine.state.activeSessionId).toBe("c");
@@ -119,16 +119,16 @@ describe("global game rules", () => {
 
   it("ranks player averages at game over and resets them on restart", () => {
     const engine = game();
-    engine.join("a", 0);
-    engine.join("b", 1);
+    engine.join("a", 0, "🦊");
+    engine.join("b", 1, "🐼");
     engine.answer("a", engine.state.turnId!, { type: "number", value: 1 }, 1_000, 1_000);
     engine.answer("b", engine.state.turnId!, { type: "number", value: 2 }, 3_000, 2_000);
     engine.answer("a", engine.state.turnId!, { type: "number", value: 3 }, 4_000, 3_000);
     engine.answer("b", engine.state.turnId!, { type: "boom" }, 5_000, 1_000);
 
     expect(engine.responseRankings()).toEqual([
-      { sessionId: "b", rank: 1, averageMillis: 1_500 },
-      { sessionId: "a", rank: 2, averageMillis: 2_000 },
+      { sessionId: "b", nickname: "🐼", rank: 1, averageMillis: 1_500 },
+      { sessionId: "a", nickname: "🦊", rank: 2, averageMillis: 2_000 },
     ]);
 
     engine.restart("a", 6_000);
@@ -140,7 +140,14 @@ describe("global game rules", () => {
     engine.join("a", 0);
     engine.timeout(engine.state.turnId!, engine.state.deadline!, engine.state.deadline!);
     expect(engine.responseRankings()).toEqual([
-      { sessionId: "a", rank: 1, averageMillis: TURN_MILLIS },
+      { sessionId: "a", nickname: "😀", rank: 1, averageMillis: TURN_MILLIS },
     ]);
+  });
+
+  it("updates an existing player's validated emoji nickname", () => {
+    const engine = game();
+    engine.join("a", 0, "🦊");
+    expect(engine.join("a", 1, "🚀").changed).toBe(true);
+    expect(engine.players[0].nickname).toBe("🚀");
   });
 });

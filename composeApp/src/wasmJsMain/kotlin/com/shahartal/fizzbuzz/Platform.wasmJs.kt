@@ -18,7 +18,7 @@ actual fun currentTimeMillis(): Long = browserNow().toLong()
 actual fun anonymousSessionId(): String = browserUuid()
 
 @OptIn(ExperimentalWasmJsInterop::class)
-actual fun gameWebSocketUrl(sessionId: String): String = browserGameUrl(sessionId)
+actual fun gameWebSocketUrl(sessionId: String, nickname: String): String = browserGameUrl(sessionId, nickname)
 
 @Composable
 actual fun rememberBestNumberStore(): BestNumberStore = remember {
@@ -34,6 +34,12 @@ actual fun rememberBestNumberStore(): BestNumberStore = remember {
 
         override fun saveHighestResponseTimeMillis(value: Long) {
             browserSaveHighestResponseTimeMillis(value.toDouble())
+        }
+
+        override fun loadNickname(): String? = browserLoadNickname().takeIf(::isEmojiNickname)
+
+        override fun saveNickname(value: String) {
+            if (isEmojiNickname(value)) browserSaveNickname(value)
         }
     }
 }
@@ -98,7 +104,23 @@ private external fun browserLoadHighestResponseTimeMillis(): Double
 private external fun browserSaveHighestResponseTimeMillis(value: Double)
 
 @OptIn(ExperimentalWasmJsInterop::class)
-@JsFun("""sessionId => {
+@JsFun("""() => {
+    try {
+        return localStorage.getItem('seven-boom-nickname-emoji') || '';
+    } catch (_) {
+        return '';
+    }
+}""")
+private external fun browserLoadNickname(): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""value => {
+    try { localStorage.setItem('seven-boom-nickname-emoji', value); } catch (_) {}
+}""")
+private external fun browserSaveNickname(value: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""(sessionId, nickname) => {
     const isLocalHost = location.hostname === 'localhost' ||
         location.hostname === '127.0.0.1' ||
         location.hostname === '::1';
@@ -106,9 +128,10 @@ private external fun browserSaveHighestResponseTimeMillis(value: Double)
     const endpoint = isWebpackDevelopmentServer
         ? 'wss://global-seven-boom.lat-shahar.workers.dev/game'
         : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/game';
-    return endpoint + '?sessionId=' + encodeURIComponent(sessionId);
+    return endpoint + '?sessionId=' + encodeURIComponent(sessionId) +
+        '&nickname=' + encodeURIComponent(nickname);
 }""")
-private external fun browserGameUrl(sessionId: String): String
+private external fun browserGameUrl(sessionId: String, nickname: String): String
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""(hidden, visible) => {

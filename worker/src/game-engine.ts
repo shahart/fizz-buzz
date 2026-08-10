@@ -1,10 +1,22 @@
 export const TURN_MILLIS = 7_000;
+export const DEFAULT_EMOJI_NICKNAME = "😀";
+export const EMOJI_NICKNAMES = new Set([
+  "😀", "😎", "🥳", "🤩", "😂", "😊",
+  "🦊", "🐼", "🐸", "🦁", "🐵", "🐙",
+  "🦄", "🐲", "🦖", "🐝", "🦋", "🐳",
+  "🚀", "⚡", "🔥", "🌈", "⭐", "🌙",
+]);
+
+export function isEmojiNickname(value: string): boolean {
+  return EMOJI_NICKNAMES.has(value);
+}
 
 export type Phase = "active" | "gameOver";
 export type GameOverReason = "wrongAnswer" | "timeout" | "noPlayers";
 
 export interface Player {
   sessionId: string;
+  nickname: string;
   joinOrder: number;
   responseTimeTotalMillis: number;
   responseCount: number;
@@ -12,6 +24,7 @@ export interface Player {
 
 export interface ResponseRanking {
   sessionId: string;
+  nickname: string;
   rank: number;
   averageMillis: number;
 }
@@ -65,14 +78,20 @@ export class GameEngine {
     private readonly newTurnId: () => string = () => crypto.randomUUID(),
   ) {}
 
-  join(sessionId: string, now: number): Mutation {
-    if (this.players.some((player) => player.sessionId === sessionId)) {
-      return { changed: false, alarm: this.state.deadline };
+  join(sessionId: string, now: number, nickname = DEFAULT_EMOJI_NICKNAME): Mutation {
+    nickname = isEmojiNickname(nickname) ? nickname : DEFAULT_EMOJI_NICKNAME;
+    const existing = this.players.find((player) => player.sessionId === sessionId);
+    if (existing !== undefined) {
+      if (existing.nickname === nickname) return { changed: false, alarm: this.state.deadline };
+      existing.nickname = nickname;
+      this.state.revision += 1;
+      return { changed: true, alarm: this.state.deadline };
     }
 
     this.state.lastJoinOrder += 1;
     this.players.push({
       sessionId,
+      nickname,
       joinOrder: this.state.lastJoinOrder,
       responseTimeTotalMillis: 0,
       responseCount: 0,
@@ -115,11 +134,11 @@ export class GameEngine {
     return { changed: true, alarm: this.state.deadline };
   }
 
-  restart(sessionId: string, now: number): Mutation {
+  restart(sessionId: string, now: number, nickname = DEFAULT_EMOJI_NICKNAME): Mutation {
     if (this.state.phase === "active") {
       return this.hasPlayer(sessionId)
         ? { changed: false, alarm: this.state.deadline }
-        : this.join(sessionId, now);
+        : this.join(sessionId, now, nickname);
     }
     if (!this.hasPlayer(sessionId) || this.players.length === 0) {
       return { changed: false, alarm: this.state.deadline };
@@ -235,6 +254,7 @@ export class GameEngine {
       }
       return {
         sessionId: player.sessionId,
+        nickname: player.nickname,
         rank,
         averageMillis: Math.round(player.responseTimeTotalMillis / player.responseCount),
       };

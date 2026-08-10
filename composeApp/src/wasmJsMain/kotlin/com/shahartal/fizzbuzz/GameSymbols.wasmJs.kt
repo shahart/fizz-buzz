@@ -15,6 +15,9 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import fizz_buzz.composeapp.generated.resources.Res
+import fizz_buzz.composeapp.generated.resources.noto_emoji
+import org.jetbrains.compose.resources.Font
 
 @Composable
 actual fun BombSymbol(modifier: Modifier, fontSize: TextUnit) {
@@ -80,6 +83,17 @@ actual fun MedalSymbol(place: Int, modifier: Modifier) {
             fontWeight = FontWeight.Bold,
         )
     }
+}
+
+@Composable
+actual fun EmojiNicknameSymbol(emoji: String, modifier: Modifier, fontSize: TextUnit, color: Color) {
+    Text(
+        text = emoji,
+        modifier = modifier,
+        fontFamily = androidx.compose.ui.text.font.FontFamily(Font(Res.font.noto_emoji)),
+        fontSize = fontSize,
+        color = color,
+    )
 }
 
 actual fun platformSupportedText(text: String): String =

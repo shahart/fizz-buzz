@@ -8,6 +8,13 @@ plugins {
     id("com.android.application")
 }
 
+// Firebase's generated Android resources require the app-specific config file.
+// Keeping the plugin conditional lets contributors build the app without access
+// to the Firebase project; Analytics starts automatically when the file exists.
+if (file("google-services.json").exists()) {
+    apply(plugin = "com.google.gms.google-services")
+}
+
 kotlin {
     androidTarget {
         compilerOptions {
@@ -36,6 +43,7 @@ kotlin {
         androidMain.dependencies {
             implementation("androidx.activity:activity-compose:1.11.0")
             implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+            implementation("com.google.firebase:firebase-analytics:23.2.0")
             implementation("io.ktor:ktor-client-okhttp:3.5.1")
         }
         wasmJsMain.dependencies {
