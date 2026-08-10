@@ -39,6 +39,7 @@ private class AndroidSpeechRecognizerController(
     override var hasDetectedSpeech: Boolean = false
         private set
     private var active = false
+    private var listening = false
     private var permissionRequestPending = false
     private var destroyed = false
     private val startRunnable = Runnable { beginListening() }
@@ -74,7 +75,10 @@ private class AndroidSpeechRecognizerController(
     override fun stopListening() {
         active = false
         handler.removeCallbacks(startRunnable)
-        recognizer.cancel()
+        if (listening) {
+            listening = false
+            recognizer.cancel()
+        }
     }
 
     override fun consumeResults(): List<String>? = results.also { results = null }
@@ -87,11 +91,13 @@ private class AndroidSpeechRecognizerController(
     }
 
     override fun onResults(results: Bundle?) {
+        listening = false
         val recognized = results
             ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             ?.filter(String::isNotBlank)
         if (!recognized.isNullOrEmpty()) {
             this.results = recognized
+            Log.d(TAG, "Speech recognition result: $recognized")
             active = false
             handler.removeCallbacks(startRunnable)
         } else if (active) {
@@ -100,7 +106,9 @@ private class AndroidSpeechRecognizerController(
     }
 
     override fun onError(error: Int) {
+        listening = false
         Log.w(TAG, "Speech recognition error: ${errorName(error)} ($error)")
+        if (active && publishLatestPartial()) return
         when (error) {
             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> active = false
             SpeechRecognizer.ERROR_CLIENT -> if (active) scheduleStart(RETRY_DELAY_MILLIS)
@@ -110,17 +118,19 @@ private class AndroidSpeechRecognizerController(
     }
 
     private fun scheduleStart(delayMillis: Long) {
-        if (!active || destroyed) return
+        if (!active || destroyed || listening) return
         handler.removeCallbacks(startRunnable)
         handler.postDelayed(startRunnable, delayMillis)
     }
 
     private fun beginListening() {
-        if (!active || destroyed) return
+        if (!active || destroyed || listening) return
         try {
+            listening = true
             recognizer.startListening(intent)
             Log.d(TAG, "Speech recognition listening")
         } catch (exception: RuntimeException) {
+            listening = false
             Log.w(TAG, "Unable to start speech recognition", exception)
             scheduleStart(BUSY_RETRY_DELAY_MILLIS)
         }
@@ -149,9 +159,7 @@ private class AndroidSpeechRecognizerController(
         latestPartial?.let { partial ->
             handler.postDelayed({
                 if (active && results == null && latestPartial == partial) {
-                    results = listOf(partial)
-                    active = false
-                    recognizer.cancel()
+                    publishLatestPartial()
                 }
             }, PARTIAL_RESULT_FALLBACK_MILLIS)
         }
@@ -161,6 +169,15 @@ private class AndroidSpeechRecognizerController(
         latestPartial = partialResults
             ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
             ?.firstOrNull { it.isNotBlank() }
+    }
+
+    private fun publishLatestPartial(): Boolean {
+        val partial = latestPartial?.takeIf(String::isNotBlank) ?: return false
+        results = listOf(partial)
+        active = false
+        handler.removeCallbacks(startRunnable)
+        Log.d(TAG, "Using partial speech recognition result: $partial")
+        return true
     }
     override fun onEvent(eventType: Int, params: Bundle?) = Unit
 
