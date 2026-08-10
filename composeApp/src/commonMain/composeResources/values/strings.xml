@@ -2,15 +2,28 @@
 <resources>
     <string name="layout_direction">ltr</string>
     <string name="ready">READY?</string>
-    <string name="instructions">Say or tap the number — use BOOM for multiples of 7 and numbers containing 7</string>
+    <string name="instructions">Say or tap the number — use BOOM 💣 for multiples of 7 and numbers containing 7</string>
     <string name="speech_unavailable">Speech recognition is not available on this device — use the buttons to play</string>
     <string name="start_game">Start game</string>
-    <string name="boom">BOOM</string>
-    <string name="say_it_now">SAY IT NOW</string>
+    <string name="boom">BOOM 💣</string>
     <string name="time_is_up">Time is up</string>
     <string name="wrong_answer">Wrong answer</string>
-    <string name="say_boom">Say BOOM</string>
+    <string name="someone_else_timed_out">Someone else ran out of time</string>
+    <string name="someone_else_wrong_answer">Someone else gave a wrong answer</string>
     <string name="seconds_remaining_listening">seconds remaining • microphone listening</string>
     <string name="heard">Heard: %1$s</string>
     <string name="play_again">Play again</string>
+    <string name="join_game">Join game</string>
+    <string name="rejoin_game">Rejoin game</string>
+    <string name="joining">Joining the global game…</string>
+    <string name="reconnecting">Connection lost — reconnecting…</string>
+    <string name="waiting">Waiting</string>
+    <string name="your_turn">Your turn</string>
+    <string name="connected_players">%1$d players connected</string>
+    <string name="record">Record: %1$d</string>
+    <string name="highest_response_time">Highest response time: %1$s seconds</string>
+    <string name="average_response_time">Average response time: %1$s seconds</string>
+    <string name="response_time_rank">Response-time rank: %1$d of %2$d</string>
+    <string name="response_time_unranked">Response-time rank: —</string>
+    <string name="latency">Latency: %1$s ms</string>
 </resources>

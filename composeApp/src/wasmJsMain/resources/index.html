@@ -7,7 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="icon.svg">
     <title>fizz-buzz 7-boom</title>
     <script>
-        const isHebrew = (navigator.language || "").toLowerCase().startsWith("he");
+        let isHebrew = (navigator.language || "").toLowerCase().startsWith("he");
         document.documentElement.lang = isHebrew ? "he" : "en";
         document.documentElement.dir = isHebrew ? "rtl" : "ltr";
         if (isHebrew) {

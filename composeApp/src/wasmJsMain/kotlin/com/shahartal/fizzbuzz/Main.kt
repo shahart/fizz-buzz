@@ -1,4 +1,4 @@
-package com.shahartal.countdown
+package com.shahartal.fizzbuzz
 
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.window.ComposeViewport

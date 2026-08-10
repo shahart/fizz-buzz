@@ -1,4 +1,4 @@
-package com.shahartal.countdown
+package com.shahartal.fizzbuzz
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity

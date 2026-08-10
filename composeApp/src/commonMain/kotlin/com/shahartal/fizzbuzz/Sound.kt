@@ -1,4 +1,4 @@
-package com.shahartal.countdown
+package com.shahartal.fizzbuzz
 
 expect fun playTimeoutSound()
 

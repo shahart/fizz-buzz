@@ -1,0 +1,418 @@
+package com.shahartal.fizzbuzz
+
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.Typography
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.LayoutDirection
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import fizz_buzz.composeapp.generated.resources.Res
+import fizz_buzz.composeapp.generated.resources.average_response_time
+import fizz_buzz.composeapp.generated.resources.boom
+import fizz_buzz.composeapp.generated.resources.connected_players
+import fizz_buzz.composeapp.generated.resources.instructions
+import fizz_buzz.composeapp.generated.resources.highest_response_time
+import fizz_buzz.composeapp.generated.resources.join_game
+import fizz_buzz.composeapp.generated.resources.joining
+import fizz_buzz.composeapp.generated.resources.layout_direction
+import fizz_buzz.composeapp.generated.resources.latency
+import fizz_buzz.composeapp.generated.resources.noto_sans_hebrew
+import fizz_buzz.composeapp.generated.resources.play_again
+import fizz_buzz.composeapp.generated.resources.ready
+import fizz_buzz.composeapp.generated.resources.record
+import fizz_buzz.composeapp.generated.resources.reconnecting
+import fizz_buzz.composeapp.generated.resources.response_time_rank
+import fizz_buzz.composeapp.generated.resources.response_time_unranked
+import fizz_buzz.composeapp.generated.resources.rejoin_game
+import fizz_buzz.composeapp.generated.resources.someone_else_timed_out
+import fizz_buzz.composeapp.generated.resources.someone_else_wrong_answer
+import fizz_buzz.composeapp.generated.resources.speech_unavailable
+import fizz_buzz.composeapp.generated.resources.time_is_up
+import fizz_buzz.composeapp.generated.resources.waiting
+import fizz_buzz.composeapp.generated.resources.wrong_answer
+import fizz_buzz.composeapp.generated.resources.your_turn
+import kotlinx.coroutines.delay
+import org.jetbrains.compose.resources.Font
+import org.jetbrains.compose.resources.stringResource
+
+private val Navy = Color(0xFF102A43)
+private val Sky = Color(0xFFEAF4FF)
+private val Blue = Color(0xFF1473E6)
+private val Red = Color(0xFFD92D20)
+private const val MICROPHONE_SETTLE_MILLIS = 150L
+
+@Composable
+fun App() {
+    val direction = if (stringResource(Res.string.layout_direction) == "rtl") LayoutDirection.Rtl else LayoutDirection.Ltr
+    CompositionLocalProvider(LocalLayoutDirection provides direction) {
+        MaterialTheme(typography = fizzBuzzTypography()) { MultiplayerGame() }
+    }
+}
+
+@Composable
+private fun fizzBuzzTypography(): Typography {
+    val fontFamily = FontFamily(
+        Font(Res.font.noto_sans_hebrew, FontWeight.Normal),
+        Font(Res.font.noto_sans_hebrew, FontWeight.Bold),
+    )
+    val defaults = Typography()
+    return defaults.copy(
+        displayLarge = defaults.displayLarge.copy(fontFamily = fontFamily),
+        displayMedium = defaults.displayMedium.copy(fontFamily = fontFamily),
+        displaySmall = defaults.displaySmall.copy(fontFamily = fontFamily),
+        headlineLarge = defaults.headlineLarge.copy(fontFamily = fontFamily),
+        headlineMedium = defaults.headlineMedium.copy(fontFamily = fontFamily),
+        headlineSmall = defaults.headlineSmall.copy(fontFamily = fontFamily),
+        titleLarge = defaults.titleLarge.copy(fontFamily = fontFamily),
+        titleMedium = defaults.titleMedium.copy(fontFamily = fontFamily),
+        titleSmall = defaults.titleSmall.copy(fontFamily = fontFamily),
+        bodyLarge = defaults.bodyLarge.copy(fontFamily = fontFamily),
+        bodyMedium = defaults.bodyMedium.copy(fontFamily = fontFamily),
+        bodySmall = defaults.bodySmall.copy(fontFamily = fontFamily),
+        labelLarge = defaults.labelLarge.copy(fontFamily = fontFamily),
+        labelMedium = defaults.labelMedium.copy(fontFamily = fontFamily),
+        labelSmall = defaults.labelSmall.copy(fontFamily = fontFamily),
+    )
+}
+
+@Composable
+private fun MultiplayerGame() {
+    val scope = rememberCoroutineScope()
+    val bestNumberStore = rememberBestNumberStore()
+    val session = remember(bestNumberStore) {
+        GameSession(
+            scope,
+            initialBestNumber = bestNumberStore.load(),
+            initialHighestResponseTimeMillis = bestNumberStore.loadHighestResponseTimeMillis(),
+        )
+    }
+    val uiState by session.state.collectAsState()
+    val snapshot = uiState.snapshot
+    val speech = rememberSpeechRecognizerController()
+    var lastHeard by remember { mutableStateOf<String?>(null) }
+    var now by remember { mutableLongStateOf(currentTimeMillis()) }
+    var soundedRevision by remember { mutableLongStateOf(-1) }
+    var temporaryFailureBlink by remember { mutableStateOf(false) }
+    val activeTurn = uiState.isActiveTurn(session.sessionId)
+
+    LaunchedEffect(uiState.bestNumber) {
+        bestNumberStore.save(uiState.bestNumber)
+    }
+    LaunchedEffect(uiState.highestResponseTimeMillis) {
+        bestNumberStore.saveHighestResponseTimeMillis(uiState.highestResponseTimeMillis)
+    }
+
+    DisposableEffect(session) { onDispose(session::close) }
+    ObserveGameLifecycle(
+        onStopped = {
+            speech.stopListening()
+            session.leaveForFocusLoss()
+        },
+        onResumed = {},
+    )
+
+    LaunchedEffect(snapshot?.deadline, uiState.serverClockOffsetMillis) {
+        while (snapshot?.phase == GamePhase.ACTIVE) {
+            now = currentTimeMillis()
+            delay(100)
+        }
+    }
+
+    LaunchedEffect(activeTurn, snapshot?.turnId) {
+        speech.stopListening()
+        val turnId = snapshot?.turnId ?: return@LaunchedEffect
+        if (!activeTurn) return@LaunchedEffect
+        delay(MICROPHONE_SETTLE_MILLIS)
+        if (speech.isSupported) speech.startListening()
+        try {
+            while (true) {
+                delay(100)
+                val alternatives = speech.consumeResults() ?: continue
+                lastHeard = alternatives.firstOrNull()
+                session.submitRecognition(turnId, alternatives)
+                return@LaunchedEffect
+            }
+        } finally {
+            speech.stopListening()
+        }
+    }
+
+    LaunchedEffect(snapshot?.revision, snapshot?.phase) {
+        if (
+            snapshot?.phase == GamePhase.GAME_OVER &&
+            snapshot.revision != soundedRevision &&
+            snapshot.gameOverReason != GameOverReason.NO_PLAYERS
+        ) {
+            soundedRevision = snapshot.revision
+            playTimeoutSound()
+        }
+    }
+
+    LaunchedEffect(snapshot?.revision, snapshot?.failedSessionId) {
+        temporaryFailureBlink = false
+        val current = snapshot ?: return@LaunchedEffect
+        if (
+            current.phase == GamePhase.GAME_OVER &&
+            current.gameOverReason != GameOverReason.NO_PLAYERS &&
+            current.failedByAnotherPlayer(session.sessionId)
+        ) {
+            temporaryFailureBlink = true
+            delay(2_000)
+            temporaryFailureBlink = false
+        }
+    }
+
+    val failed = snapshot?.phase == GamePhase.GAME_OVER && snapshot.gameOverReason != GameOverReason.NO_PLAYERS
+    val currentPlayerFailed = failed && snapshot.failedSessionId == session.sessionId
+    val shouldBlink = currentPlayerFailed || temporaryFailureBlink
+    val flash = rememberInfiniteTransition(label = "game over flash")
+    val flashAlpha by flash.animateFloat(
+        initialValue = 0.2f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(260), RepeatMode.Reverse),
+        label = "game over alpha",
+    )
+    val background = when {
+        failed && shouldBlink -> Red.copy(alpha = flashAlpha)
+        failed -> Red
+        else -> Sky
+    }
+
+    Surface(modifier = Modifier.fillMaxSize(), color = background) {
+        Box(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.fillMaxSize().padding(24.dp).padding(bottom = 92.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center,
+            ) {
+                when (uiState.connectionStatus) {
+                    ConnectionStatus.IDLE, ConnectionStatus.REJOIN -> JoinPanel(
+                        speechSupported = speech.isSupported,
+                        rejoin = uiState.connectionStatus == ConnectionStatus.REJOIN,
+                        onJoin = { prepareTimeoutSound(); lastHeard = null; session.join() },
+                    )
+                    ConnectionStatus.JOINING -> StatusText(stringResource(Res.string.joining))
+                    ConnectionStatus.RECONNECTING -> StatusText(stringResource(Res.string.reconnecting))
+                    ConnectionStatus.CONNECTED -> if (snapshot != null) GamePanel(
+                        snapshot = snapshot,
+                        sessionId = session.sessionId,
+                        activeTurn = activeTurn,
+                        seconds = uiState.secondsRemaining(now),
+                        averageResponseTime = uiState.averageResponseTimeText(session.sessionId),
+                        latencyMillis = uiState.latencyMillis,
+                        bestNumber = uiState.bestNumber,
+                        highestResponseTime = uiState.highestResponseTimeText(),
+                        lastHeard = lastHeard,
+                        onRestart = session::restart,
+                    )
+                }
+            }
+
+            AnswerButtons(
+                enabled = activeTurn,
+                number = snapshot?.number ?: 1,
+                onBoom = { lastHeard = null; snapshot?.turnId?.let(session::submitBoom) },
+                onNumber = {
+                    lastHeard = null
+                    snapshot?.turnId?.let { session.submitNumber(it, snapshot.number) }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
+        }
+    }
+}
+
+@Composable
+private fun JoinPanel(speechSupported: Boolean, rejoin: Boolean, onJoin: () -> Unit) {
+    Text(stringResource(Res.string.ready), color = Navy, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(16.dp))
+    Text(
+        platformSupportedText(
+            if (speechSupported) stringResource(Res.string.instructions) else stringResource(Res.string.speech_unavailable),
+        ),
+        color = Navy.copy(alpha = 0.7f), fontSize = 16.sp, textAlign = TextAlign.Center,
+    )
+    Spacer(Modifier.height(32.dp))
+    Button(onClick = onJoin, shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+        Text(stringResource(if (rejoin) Res.string.rejoin_game else Res.string.join_game), Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+    }
+}
+
+@Composable
+private fun StatusText(text: String) {
+    Text(text, color = Navy, fontSize = 26.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center)
+}
+
+@Composable
+private fun GamePanel(
+    snapshot: GameSnapshot,
+    sessionId: String,
+    activeTurn: Boolean,
+    seconds: Int,
+    averageResponseTime: String,
+    latencyMillis: Long?,
+    bestNumber: Int,
+    highestResponseTime: String,
+    lastHeard: String?,
+    onRestart: () -> Unit,
+) {
+    val failed = snapshot.phase == GamePhase.GAME_OVER
+    if (failed) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            BombSymbol(Modifier.size(48.dp), fontSize = 48.sp)
+            Text(
+                text = stringResource(Res.string.boom).replace("💣", "").trim(),
+                color = Color.White,
+                fontSize = 56.sp,
+                fontWeight = FontWeight.Black,
+            )
+        }
+    } else {
+        Text(
+            text = stringResource(if (activeTurn) Res.string.your_turn else Res.string.waiting),
+            color = Navy,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Black,
+        )
+    }
+    Spacer(Modifier.height(14.dp))
+    Text(stringResource(Res.string.connected_players, snapshot.connectedPlayers), color = if (failed) Color.White else Navy.copy(alpha = .65f))
+    Spacer(Modifier.height(18.dp))
+    Box(Modifier.size(190.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
+        Text(snapshot.number.toString(), color = Navy, fontSize = 72.sp, fontWeight = FontWeight.Black)
+    }
+    Spacer(Modifier.height(24.dp))
+    Text(seconds.toString(), color = if (failed) Color.White else Blue, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+    val statusMessage = when {
+            snapshot.gameOverReason == GameOverReason.TIMEOUT && snapshot.failedByAnotherPlayer(sessionId) ->
+                stringResource(Res.string.someone_else_timed_out)
+            snapshot.gameOverReason == GameOverReason.TIMEOUT -> stringResource(Res.string.time_is_up)
+            snapshot.gameOverReason == GameOverReason.WRONG_ANSWER && snapshot.failedByAnotherPlayer(sessionId) ->
+                stringResource(Res.string.someone_else_wrong_answer)
+            failed -> stringResource(Res.string.wrong_answer)
+            !activeTurn -> stringResource(Res.string.waiting)
+            else -> null
+        }
+    if (statusMessage != null) {
+        Text(
+            text = statusMessage,
+            color = if (failed) Color.White else Navy.copy(alpha = .7f),
+            fontSize = 16.sp,
+            textAlign = TextAlign.Center,
+        )
+    }
+    Spacer(Modifier.height(10.dp))
+    Text(
+        text = stringResource(Res.string.record, bestNumber),
+        color = if (failed) Color.White.copy(alpha = .9f) else Navy.copy(alpha = .7f),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center,
+    )
+    Text(
+        text = stringResource(Res.string.highest_response_time, highestResponseTime),
+        color = if (failed) Color.White.copy(alpha = .9f) else Navy.copy(alpha = .7f),
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center,
+    )
+    Text(
+        text = stringResource(Res.string.average_response_time, averageResponseTime),
+        color = if (failed) Color.White.copy(alpha = .85f) else Navy.copy(alpha = .65f),
+        fontSize = 12.sp,
+        textAlign = TextAlign.Center,
+    )
+    if (failed) {
+        val rank = snapshot.responseRank(sessionId)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = if (rank == null) {
+                    stringResource(Res.string.response_time_unranked)
+                } else {
+                    stringResource(Res.string.response_time_rank, rank.first, rank.second)
+                },
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center,
+            )
+            val place = rank?.first
+            if (place != null && place in 1..3) MedalSymbol(place, Modifier.size(28.dp))
+        }
+    }
+    Text(
+        text = stringResource(Res.string.latency, latencyMillis?.toString() ?: "—"),
+        color = if (failed) Color.White.copy(alpha = .7f) else Navy.copy(alpha = .5f),
+        fontSize = 9.sp,
+        textAlign = TextAlign.Center,
+    )
+    if (activeTurn && lastHeard != null) {
+        Spacer(Modifier.height(12.dp))
+        Text(lastHeard, color = Navy, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    }
+    if (failed) {
+        Spacer(Modifier.height(30.dp))
+        Button(onClick = onRestart, shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+            Text(stringResource(Res.string.play_again), Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+        }
+    }
+}
+
+@Composable
+private fun AnswerButtons(enabled: Boolean, number: Int, onBoom: () -> Unit, onNumber: () -> Unit, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+        Button(
+            onClick = onBoom, enabled = enabled, modifier = Modifier.weight(1f).height(64.dp),
+            shape = RoundedCornerShape(18.dp), colors = ButtonDefaults.buttonColors(containerColor = Red),
+        ) { BombSymbol(Modifier.size(36.dp), fontSize = 30.sp) }
+        Button(
+            onClick = onNumber, enabled = enabled, modifier = Modifier.weight(1f).height(64.dp),
+            shape = RoundedCornerShape(18.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue),
+        ) { Text(number.toString(), fontSize = 28.sp, fontWeight = FontWeight.Black) }
+    }
+}

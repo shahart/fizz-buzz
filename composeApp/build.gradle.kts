@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
     kotlin("multiplatform")
+    kotlin("plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
     id("com.android.application")
@@ -27,9 +28,18 @@ kotlin {
             implementation(compose.material3)
             implementation(compose.components.resources)
             implementation(compose.ui)
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+            implementation("io.ktor:ktor-client-core:3.5.1")
+            implementation("io.ktor:ktor-client-websockets:3.5.1")
         }
         androidMain.dependencies {
             implementation("androidx.activity:activity-compose:1.11.0")
+            implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
+            implementation("io.ktor:ktor-client-okhttp:3.5.1")
+        }
+        wasmJsMain.dependencies {
+            implementation("io.ktor:ktor-client-js:3.5.1")
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -38,20 +48,28 @@ kotlin {
 }
 
 android {
-    namespace = "com.shahartal.countdown"
+    namespace = "com.shahartal.fizzbuzz"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.shahartal.countdown"
+        applicationId = "com.shahartal.fizzbuzz"
         minSdk = 23
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
+        val workerUrl = providers.gradleProperty("gameWorkerUrl")
+            .orElse("wss://global-seven-boom.lat-shahar.workers.dev/game")
+            .get()
+        buildConfigField("String", "GAME_WORKER_URL", "\"$workerUrl\"")
     }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 }
 

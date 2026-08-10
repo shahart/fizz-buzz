@@ -1,4 +1,4 @@
-package com.shahartal.countdown
+package com.shahartal.fizzbuzz
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
