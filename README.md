@@ -1,6 +1,6 @@
 # fizz-buzz 7-boom
 
-A global Compose Multiplatform voice and touch game for Android and web. One Cloudflare Durable Object owns the shared counter, player rotation, and seven-second deadline. Say or tap the displayed number, or say `BOOM`/tap 💣 when it is divisible by 7 or contains the digit 7.
+A global Compose Multiplatform voice and touch game for Android, Wear OS, and web. One Cloudflare Durable Object owns the shared counter, player rotation, and seven-second deadline. Say or tap the displayed number, or say `BOOM`/tap 💣 when it is divisible by 7 or contains the digit 7.
 
 ## Run
 
@@ -15,11 +15,17 @@ npm run dev
 # Terminal 2: Android debug APK (connects to the deployed Worker by default)
 ./gradlew :composeApp:assembleDebug
 
+# Standalone Wear OS debug APK
+./gradlew :wearApp:assembleDebug
+
 # Kotlin tests and production web bundle
 ./gradlew :composeApp:allTests :composeApp:wasmJsBrowserDistribution
 
 # Worker type-check and Durable Object/WebSocket tests
 cd worker && npm run check
+
+# Update https://global-seven-boom.lat-shahar.workers.dev/composeResources
+cd worker && npx wrangler deploy
 ```
 
 Open `http://localhost:8787` in two browser windows to exercise the global rotation. The production website is generated under `composeApp/build/dist/wasmJs/productionExecutable` and is served by the Worker on the same origin as `/game`.
@@ -31,6 +37,8 @@ Android builds use `wss://global-seven-boom.lat-shahar.workers.dev/game` by defa
 ```bash
 ./gradlew :composeApp:assembleDebug -PgameWorkerUrl=ws://10.0.2.2:8787/game
 ```
+
+Use the same property with `:wearApp:assembleDebug` for a Wear OS emulator. The watch app is packaged as a separate, standalone Wear OS APK with its own version-code range while retaining the phone app's package name for a shared Play Store listing.
 
 ## Firebase Analytics (Android)
 

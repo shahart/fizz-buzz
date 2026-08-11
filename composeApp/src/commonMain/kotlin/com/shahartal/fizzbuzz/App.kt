@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -98,10 +99,10 @@ private val Red = Color(0xFFD92D20)
 private const val MICROPHONE_SETTLE_MILLIS = 150L
 
 @Composable
-fun App() {
+fun App(compact: Boolean = false) {
     val direction = if (stringResource(Res.string.layout_direction) == "rtl") LayoutDirection.Rtl else LayoutDirection.Ltr
     CompositionLocalProvider(LocalLayoutDirection provides direction) {
-        MaterialTheme(typography = fizzBuzzTypography()) { MultiplayerGame() }
+        MaterialTheme(typography = fizzBuzzTypography()) { MultiplayerGame(compact) }
     }
 }
 
@@ -132,7 +133,7 @@ private fun fizzBuzzTypography(): Typography {
 }
 
 @Composable
-private fun MultiplayerGame() {
+private fun MultiplayerGame(compact: Boolean) {
     val scope = rememberCoroutineScope()
     val bestNumberStore = rememberBestNumberStore()
     var nickname by remember(bestNumberStore) {
@@ -244,19 +245,17 @@ private fun MultiplayerGame() {
         failed -> Red
         else -> Sky
     }
-    val gameOver = snapshot?.phase == GamePhase.GAME_OVER
-
     Surface(modifier = Modifier.fillMaxSize(), color = background) {
-        Box(Modifier.fillMaxSize()) {
+        Box(Modifier.fillMaxSize().safeDrawingPadding()) {
             BoxWithConstraints(
-                modifier = Modifier.fillMaxSize().padding(bottom = if (gameOver) 0.dp else 92.dp),
+                modifier = Modifier.fillMaxSize(),
             ) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .verticalScroll(contentScrollState)
                         .heightIn(min = maxHeight)
-                        .padding(24.dp),
+                        .padding(horizontal = if (compact) 18.dp else 24.dp, vertical = if (compact) 4.dp else 24.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -265,6 +264,7 @@ private fun MultiplayerGame() {
                             speechSupported = speech.isSupported,
                             rejoin = uiState.connectionStatus == ConnectionStatus.REJOIN,
                             nickname = nickname,
+                            compact = compact,
                             onChooseNickname = { showNicknamePicker = true },
                             onJoin = { prepareTimeoutSound(); lastHeard = null; session.join() },
                         )
@@ -280,25 +280,21 @@ private fun MultiplayerGame() {
                             bestNumber = uiState.bestNumber,
                             highestResponseTime = uiState.highestResponseTimeText(),
                             lastHeard = lastHeard,
+                            onBoom = { lastHeard = null; snapshot.turnId?.let(session::submitBoom) },
+                            onNumber = {
+                                lastHeard = null
+                                snapshot.let { current ->
+                                    current.turnId?.let { turnId -> session.submitNumber(turnId, current.number) }
+                                }
+                            },
                             onRestart = session::restart,
                             onShowRoster = { showRoster = true },
+                            compact = compact,
                         )
                     }
                 }
             }
 
-            if (!gameOver) {
-                AnswerButtons(
-                    enabled = activeTurn,
-                    number = snapshot?.number ?: 1,
-                    onBoom = { lastHeard = null; snapshot?.turnId?.let(session::submitBoom) },
-                    onNumber = {
-                        lastHeard = null
-                        snapshot?.turnId?.let { session.submitNumber(it, snapshot.number) }
-                    },
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
-            }
         }
 
         if (showNicknamePicker) {
@@ -310,6 +306,7 @@ private fun MultiplayerGame() {
                     showNicknamePicker = false
                 },
                 onDismiss = { if (nickname != null) showNicknamePicker = false },
+                compact = compact,
             )
         }
         if (showRoster && snapshot != null) {
@@ -327,27 +324,28 @@ private fun JoinPanel(
     speechSupported: Boolean,
     rejoin: Boolean,
     nickname: String?,
+    compact: Boolean,
     onChooseNickname: () -> Unit,
     onJoin: () -> Unit,
 ) {
-    Text(stringResource(Res.string.ready), color = Navy, fontSize = 32.sp, fontWeight = FontWeight.Bold)
-    Spacer(Modifier.height(16.dp))
-    Text(stringResource(Res.string.choose_nickname), color = Navy.copy(alpha = .7f), fontSize = 15.sp)
+    Text(stringResource(Res.string.ready), color = Navy, fontSize = if (compact) 24.sp else 32.sp, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(if (compact) 6.dp else 16.dp))
+    Text(stringResource(Res.string.choose_nickname), color = Navy.copy(alpha = .7f), fontSize = if (compact) 12.sp else 15.sp)
     TextButton(onClick = onChooseNickname, shape = RoundedCornerShape(14.dp)) {
         if (nickname == null) {
             Text(stringResource(Res.string.choose_emoji), fontSize = 18.sp)
         } else {
-            EmojiNicknameSymbol(nickname, fontSize = 44.sp)
+            EmojiNicknameSymbol(nickname, fontSize = if (compact) 34.sp else 44.sp)
         }
     }
-    Spacer(Modifier.height(10.dp))
+    Spacer(Modifier.height(if (compact) 2.dp else 10.dp))
     Text(
         platformSupportedText(
             if (speechSupported) stringResource(Res.string.instructions) else stringResource(Res.string.speech_unavailable),
         ),
-        color = Navy.copy(alpha = 0.7f), fontSize = 16.sp, textAlign = TextAlign.Center,
+        color = Navy.copy(alpha = 0.7f), fontSize = if (compact) 12.sp else 16.sp, textAlign = TextAlign.Center,
     )
-    Spacer(Modifier.height(32.dp))
+    Spacer(Modifier.height(if (compact) 10.dp else 32.dp))
     Button(
         onClick = onJoin,
         enabled = nickname != null,
@@ -359,25 +357,32 @@ private fun JoinPanel(
 }
 
 @Composable
-private fun EmojiNicknamePicker(selected: String?, onSelect: (String) -> Unit, onDismiss: () -> Unit) {
+private fun EmojiNicknamePicker(selected: String?, onSelect: (String) -> Unit, onDismiss: () -> Unit, compact: Boolean) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.choose_emoji), fontWeight = FontWeight.Bold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                EMOJI_NICKNAMES.chunked(6).forEach { emojis ->
+            Column(
+                modifier = if (compact) {
+                    Modifier.heightIn(max = 160.dp).verticalScroll(rememberScrollState())
+                } else {
+                    Modifier
+                },
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                EMOJI_NICKNAMES.chunked(if (compact) 4 else 6).forEach { emojis ->
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
                         emojis.forEach { emoji ->
                             TextButton(
                                 onClick = { onSelect(emoji) },
-                                modifier = Modifier.size(48.dp),
+                                modifier = Modifier.size(if (compact) 40.dp else 48.dp),
                                 shape = CircleShape,
                                 contentPadding = PaddingValues(0.dp),
                                 colors = ButtonDefaults.textButtonColors(
                                     containerColor = if (emoji == selected) Blue.copy(alpha = .15f) else Color.Transparent,
                                 ),
                             ) {
-                                EmojiNicknameSymbol(emoji, fontSize = 22.sp)
+                                EmojiNicknameSymbol(emoji, fontSize = if (compact) 20.sp else 22.sp)
                             }
                         }
                     }
@@ -454,8 +459,11 @@ private fun GamePanel(
     bestNumber: Int,
     highestResponseTime: String,
     lastHeard: String?,
+    onBoom: () -> Unit,
+    onNumber: () -> Unit,
     onRestart: () -> Unit,
     onShowRoster: () -> Unit,
+    compact: Boolean,
 ) {
     val failed = snapshot.phase == GamePhase.GAME_OVER
     if (failed) {
@@ -463,11 +471,11 @@ private fun GamePanel(
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BombSymbol(Modifier.size(48.dp), fontSize = 48.sp)
+            BombSymbol(Modifier.size(if (compact) 32.dp else 48.dp), fontSize = if (compact) 32.sp else 48.sp)
             Text(
                 text = stringResource(Res.string.boom).replace("💣", "").trim(),
                 color = Color.White,
-                fontSize = 56.sp,
+                fontSize = if (compact) 32.sp else 56.sp,
                 fontWeight = FontWeight.Black,
             )
         }
@@ -481,12 +489,12 @@ private fun GamePanel(
                 Text(
                     stringResource(Res.string.winner),
                     color = Color.White,
-                    fontSize = 28.sp,
+                    fontSize = if (compact) 18.sp else 28.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
                 )
                 winners.forEach { winner ->
-                    EmojiNicknameSymbol(winner, fontSize = 30.sp, color = Color.White)
+                    EmojiNicknameSymbol(winner, fontSize = if (compact) 22.sp else 30.sp, color = Color.White)
                 }
             }
         }
@@ -494,23 +502,25 @@ private fun GamePanel(
         Text(
             text = stringResource(if (activeTurn) Res.string.your_turn else Res.string.waiting),
             color = Navy,
-            fontSize = 24.sp,
+            fontSize = if (compact) 18.sp else 24.sp,
             fontWeight = FontWeight.Black,
         )
     }
-    Spacer(Modifier.height(14.dp))
-    TextButton(onClick = onShowRoster, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
-        Text(
-            stringResource(Res.string.connected_players, snapshot.connectedPlayers),
-            color = if (failed) Color.White else Navy.copy(alpha = .65f),
-        )
+    Spacer(Modifier.height(if (compact) 2.dp else 14.dp))
+    if (!compact) {
+        TextButton(onClick = onShowRoster, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+            Text(
+                stringResource(Res.string.connected_players, snapshot.connectedPlayers),
+                color = if (failed) Color.White else Navy.copy(alpha = .65f),
+            )
+        }
     }
-    Spacer(Modifier.height(18.dp))
-    Box(Modifier.size(190.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
-        Text(snapshot.number.toString(), color = Navy, fontSize = 72.sp, fontWeight = FontWeight.Black)
+    Spacer(Modifier.height(if (compact) 4.dp else 18.dp))
+    Box(Modifier.size(if (compact) 72.dp else 190.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
+        Text(snapshot.number.toString(), color = Navy, fontSize = if (compact) 36.sp else 72.sp, fontWeight = FontWeight.Black)
     }
-    Spacer(Modifier.height(24.dp))
-    Text(seconds.toString(), color = if (failed) Color.White else Blue, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(if (compact) 4.dp else 24.dp))
+    Text(seconds.toString(), color = if (failed) Color.White else Blue, fontSize = if (compact) 26.sp else 48.sp, fontWeight = FontWeight.Bold)
     val statusMessage = when {
             snapshot.gameOverReason == GameOverReason.TIMEOUT && snapshot.failedByAnotherPlayer(sessionId) ->
                 stringResource(Res.string.someone_else_timed_out)
@@ -525,11 +535,31 @@ private fun GamePanel(
         Text(
             text = statusMessage,
             color = if (failed) Color.White else Navy.copy(alpha = .7f),
-            fontSize = 16.sp,
+            fontSize = if (compact) 12.sp else 16.sp,
             textAlign = TextAlign.Center,
         )
     }
-    Spacer(Modifier.height(10.dp))
+    if (!failed) {
+        Spacer(Modifier.height(if (compact) 4.dp else 20.dp))
+        AnswerButtons(
+            enabled = activeTurn,
+            number = snapshot.number,
+            onBoom = onBoom,
+            onNumber = onNumber,
+            compact = compact,
+        )
+    }
+    if (activeTurn && lastHeard != null) {
+        Spacer(Modifier.height(12.dp))
+        Text(lastHeard, color = Navy, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+    }
+    if (failed) {
+        Spacer(Modifier.height(if (compact) 10.dp else 30.dp))
+        Button(onClick = onRestart, shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
+            Text(stringResource(Res.string.play_again), Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
+        }
+    }
+    Spacer(Modifier.height(if (compact) 2.dp else 10.dp))
     Text(
         text = stringResource(Res.string.record, bestNumber),
         color = if (failed) Color.White.copy(alpha = .9f) else Navy.copy(alpha = .7f),
@@ -577,28 +607,21 @@ private fun GamePanel(
         fontSize = 9.sp,
         textAlign = TextAlign.Center,
     )
-    if (activeTurn && lastHeard != null) {
-        Spacer(Modifier.height(12.dp))
-        Text(lastHeard, color = Navy, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-    }
-    if (failed) {
-        Spacer(Modifier.height(30.dp))
-        Button(onClick = onRestart, shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue)) {
-            Text(stringResource(Res.string.play_again), Modifier.padding(horizontal = 14.dp, vertical = 6.dp))
-        }
-    }
 }
 
 @Composable
-private fun AnswerButtons(enabled: Boolean, number: Int, onBoom: () -> Unit, onNumber: () -> Unit, modifier: Modifier = Modifier) {
-    Row(modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 20.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+private fun AnswerButtons(enabled: Boolean, number: Int, onBoom: () -> Unit, onNumber: () -> Unit, compact: Boolean, modifier: Modifier = Modifier) {
+    Row(
+        modifier.fillMaxWidth().padding(horizontal = if (compact) 4.dp else 24.dp, vertical = if (compact) 4.dp else 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 16.dp),
+    ) {
         Button(
-            onClick = onBoom, enabled = enabled, modifier = Modifier.weight(1f).height(64.dp),
-            shape = RoundedCornerShape(18.dp), colors = ButtonDefaults.buttonColors(containerColor = Red),
-        ) { BombSymbol(Modifier.size(36.dp), fontSize = 30.sp) }
+            onClick = onBoom, enabled = enabled, modifier = Modifier.weight(1f).height(if (compact) 44.dp else 64.dp),
+            shape = RoundedCornerShape(if (compact) 26.dp else 18.dp), colors = ButtonDefaults.buttonColors(containerColor = Red),
+        ) { BombSymbol(Modifier.size(if (compact) 28.dp else 36.dp), fontSize = if (compact) 24.sp else 30.sp) }
         Button(
-            onClick = onNumber, enabled = enabled, modifier = Modifier.weight(1f).height(64.dp),
-            shape = RoundedCornerShape(18.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue),
-        ) { Text(number.toString(), fontSize = 28.sp, fontWeight = FontWeight.Black) }
+            onClick = onNumber, enabled = enabled, modifier = Modifier.weight(1f).height(if (compact) 44.dp else 64.dp),
+            shape = RoundedCornerShape(if (compact) 26.dp else 18.dp), colors = ButtonDefaults.buttonColors(containerColor = Blue),
+        ) { Text(number.toString(), fontSize = if (compact) 22.sp else 28.sp, fontWeight = FontWeight.Black) }
     }
 }

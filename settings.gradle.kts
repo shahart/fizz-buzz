@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "fizz-buzz"
 include(":composeApp")
+include(":wearApp")
