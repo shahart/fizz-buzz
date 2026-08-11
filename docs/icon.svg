@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 108" role="img" aria-label="Two-tone number seven">
+  <defs>
+    <clipPath id="top-half">
+      <rect width="108" height="54" />
+    </clipPath>
+    <clipPath id="bottom-half">
+      <rect y="54" width="108" height="54" />
+    </clipPath>
+  </defs>
+  <path
+    d="M25 20H84V33L54 88H38L68 37H25Z"
+    fill="#D92D20"
+    clip-path="url(#top-half)"
+  />
+  <path
+    d="M25 20H84V33L54 88H38L68 37H25Z"
+    fill="#18864B"
+    clip-path="url(#bottom-half)"
+  />
+</svg>
