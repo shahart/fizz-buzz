@@ -25,7 +25,7 @@
     <string name="your_turn">Your turn</string>
     <string name="connected_players">%1$d players connected</string>
     <string name="record">Record: %1$d</string>
-    <string name="highest_response_time">Highest response time: %1$s seconds</string>
+    <string name="lowest_response_time">Lowest response time: %1$s seconds</string>
     <string name="average_response_time">Average response time: %1$s seconds</string>
     <string name="response_time_rank">Response-time rank: %1$d of %2$d</string>
     <string name="response_time_unranked">Response-time rank: —</string>
@@ -54,6 +54,9 @@
     <string name="rejoin_game">הצטרפות מחדש</string>
     <string name="joining">מצטרפים למשחק העולמי…</string>
     <string name="reconnecting">החיבור נותק — מתחברים מחדש…</string>
+    <string name="solo_mode_title">משחקים ללא חיבור</string>
+    <string name="solo_mode_message">המשחק העולמי אינו זמין. אפשר להמשיך במצב לשחקן יחיד.</string>
+    <string name="continue_solo">המשך</string>
     <string name="waiting">ממתינים</string>
     <string name="your_turn">התור שלך</string>
     <string name="connected_players">%1$d שחקנים מחוברים</string>
@@ -62,7 +65,7 @@
     <string name="dismiss_roster">סגירה</string>
     <string name="average_response_time">זמן תגובה ממוצע: %1$s שניות</string>
     <string name="record">שיא: %1$d</string>
-    <string name="highest_response_time">זמן תגובה מרבי: %1$s שניות</string>
+    <string name="lowest_response_time">זמן התגובה הקצר ביותר: %1$s שניות</string>
     <string name="response_time_rank">דירוג זמן תגובה: %1$d מתוך %2$d</string>
     <string name="response_time_unranked">דירוג זמן תגובה: —</string>
     <string name="winner">המנצח:</string>

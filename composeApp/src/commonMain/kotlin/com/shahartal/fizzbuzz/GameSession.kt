@@ -31,18 +31,19 @@ class GameSession(
     val sessionId: String = anonymousSessionId(),
     val nickname: String,
     initialBestNumber: Int = 0,
-    initialHighestResponseTimeMillis: Long = 0,
+    initialLowestResponseTimeMillis: Long = 0,
 ) {
     private val json = Json { ignoreUnknownKeys = false; explicitNulls = true }
     private val mutableState = MutableStateFlow(
         GameUiState(
             bestNumber = initialBestNumber.coerceAtLeast(0),
-            highestResponseTimeMillis = initialHighestResponseTimeMillis.coerceAtLeast(0),
+            lowestResponseTimeMillis = initialLowestResponseTimeMillis.coerceAtLeast(0),
         ),
     )
     val state: StateFlow<GameUiState> = mutableState.asStateFlow()
     private var connection: DefaultClientWebSocketSession? = null
     private var connectionJob: Job? = null
+    private var localDeadlineJob: Job? = null
     private var shouldBeJoined = false
     private var lastRecordedTurnId: String? = null
     private var pingSequence = 0L
@@ -52,6 +53,7 @@ class GameSession(
     fun join() {
         if (shouldBeJoined) return
         shouldBeJoined = true
+        localDeadlineJob?.cancel()
         mutableState.value = mutableState.value.copy(connectionStatus = ConnectionStatus.JOINING)
         connectionJob = scope.launch { connectionLoop() }
     }
@@ -63,6 +65,8 @@ class GameSession(
         connection = null
         connectionJob?.cancel()
         connectionJob = null
+        localDeadlineJob?.cancel()
+        localDeadlineJob = null
         lastRecordedTurnId = null
         pendingPingId = null
         mutableState.value = mutableState.value.afterFocusLoss()
@@ -72,11 +76,26 @@ class GameSession(
         }
     }
 
-    fun restart() = send("{\"type\":\"restart\"}")
+    fun restart() {
+        if (mutableState.value.connectionStatus == ConnectionStatus.SOLO) {
+            startSoloGame()
+        } else {
+            send("{\"type\":\"restart\"}")
+        }
+    }
+
+    fun continueSolo() {
+        if (mutableState.value.connectionStatus == ConnectionStatus.SOLO_PENDING) startSoloGame()
+    }
 
     fun submitBoom(turnId: String) = sendAnswer(turnId, "boom")
 
     fun submitNumber(turnId: String, number: Int) {
+        if (mutableState.value.connectionStatus == ConnectionStatus.SOLO) {
+            val current = mutableState.value.snapshot ?: return
+            submitSoloAnswer(turnId, !current.number.isBoomNumber() && number == current.number)
+            return
+        }
         sendTrackedAnswer(turnId) { responseTimeMillis ->
             buildJsonObject {
                 put("type", "answer")
@@ -101,21 +120,17 @@ class GameSession(
         shouldBeJoined = false
         connectionJob?.cancel()
         connectionJob = null
+        localDeadlineJob?.cancel()
+        localDeadlineJob = null
         connection = null
         client.close()
     }
 
     private suspend fun connectionLoop() {
-        var attempt = 0
         while (scope.isActive && shouldBeJoined) {
-            if (attempt > 0) {
-                mutableState.value = mutableState.value.copy(connectionStatus = ConnectionStatus.RECONNECTING)
-                delay(reconnectDelayMillis(attempt - 1))
-            }
             try {
                 client.webSocket(gameWebSocketUrl(sessionId, nickname)) {
                     connection = this
-                    attempt = 0
                     val socket = this
                     val pingJob = launch {
                         while (isActive) {
@@ -163,11 +178,22 @@ class GameSession(
             } finally {
                 connection = null
             }
-            if (shouldBeJoined) attempt = (attempt + 1).coerceAtMost(5)
+            if (shouldBeJoined) {
+                mutableState.value = mutableState.value.copy(
+                    connectionStatus = ConnectionStatus.SOLO_PENDING,
+                    latencyMillis = null,
+                )
+            }
+            return
         }
     }
 
     private fun sendAnswer(turnId: String, answerType: String) {
+        if (mutableState.value.connectionStatus == ConnectionStatus.SOLO) {
+            val current = mutableState.value.snapshot ?: return
+            submitSoloAnswer(turnId, answerType == "boom" && current.number.isBoomNumber())
+            return
+        }
         sendTrackedAnswer(turnId) { responseTimeMillis ->
             buildJsonObject {
                 put("type", "answer")
@@ -192,5 +218,41 @@ class GameSession(
     private fun send(message: String) {
         val active = connection ?: return
         scope.launch { active.send(Frame.Text(message)) }
+    }
+
+    private fun startSoloGame() {
+        val before = mutableState.value
+        val startingNumber = before.snapshot
+            ?.takeIf { it.phase == GamePhase.ACTIVE }
+            ?.number
+            ?: 1
+        val now = currentTimeMillis()
+        mutableState.value = before.startSoloGame(sessionId, nickname, now, startingNumber)
+        lastRecordedTurnId = null
+        scheduleSoloDeadline()
+    }
+
+    private fun submitSoloAnswer(turnId: String, correct: Boolean) {
+        if (lastRecordedTurnId == turnId) return
+        val before = mutableState.value
+        val now = currentTimeMillis()
+        val after = before.answerSolo(sessionId, turnId, correct, now)
+        if (after === before) return
+        mutableState.value = after
+        lastRecordedTurnId = turnId
+        if (after.snapshot?.phase == GamePhase.ACTIVE) scheduleSoloDeadline() else localDeadlineJob?.cancel()
+    }
+
+    private fun scheduleSoloDeadline() {
+        localDeadlineJob?.cancel()
+        val current = mutableState.value.snapshot ?: return
+        val turnId = current.turnId ?: return
+        val deadline = current.deadline ?: return
+        localDeadlineJob = scope.launch {
+            delay((deadline - currentTimeMillis()).coerceAtLeast(0L))
+            val before = mutableState.value
+            val after = before.timeoutSolo(sessionId, turnId, currentTimeMillis())
+            if (after !== before) mutableState.value = after
+        }
     }
 }

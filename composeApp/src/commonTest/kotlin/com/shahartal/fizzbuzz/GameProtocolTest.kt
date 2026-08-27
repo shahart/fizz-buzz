@@ -110,27 +110,34 @@ class GameProtocolTest {
     }
 
     @Test
-    fun responseAverageUsesAuthoritativeTurnStartAndResetsOnRestart() {
+    fun responseMetricsUseAuthoritativeTurnStartAndResetOnRestart() {
         val first = GameUiState(ConnectionStatus.CONNECTED, active, serverClockOffsetMillis = 500)
             .recordResponse("a", "turn-4", localNowMillis = 11_000)
         assertEquals(1, first.responseCount)
         assertEquals(1_500L, first.responseTimeTotalMillis)
         assertEquals("1.5", first.averageResponseTimeText())
-        assertEquals(1_500L, first.highestResponseTimeMillis)
-        assertEquals("1.5", first.highestResponseTimeText())
+        assertEquals(1_500L, first.lowestResponseTimeMillis)
+        assertEquals("1.5", first.lowestResponseTimeText())
 
         val secondTurn = active.copy(revision = 5, turnId = "turn-5", serverTime = 12_000, deadline = 19_000)
         val second = first.reduce(secondTurn, receivedAtMillis = 11_500)
             .recordResponse("a", "turn-5", localNowMillis = 13_500)
         assertEquals(2, second.responseCount)
         assertEquals("1.8", second.averageResponseTimeText())
-        assertEquals(2_000L, second.highestResponseTimeMillis)
-        assertEquals("2.0", second.highestResponseTimeText())
+        assertEquals(1_500L, second.lowestResponseTimeMillis)
+        assertEquals("1.5", second.lowestResponseTimeText())
 
-        val gameOver = second.reduce(secondTurn.copy(revision = 6, phase = GamePhase.GAME_OVER), 14_000)
-        val restarted = gameOver.reduce(active.copy(revision = 7, number = 1), 15_000)
+        val thirdTurn = secondTurn.copy(revision = 6, turnId = "turn-6", serverTime = 14_000, deadline = 21_000)
+        val third = second.reduce(thirdTurn, receivedAtMillis = 13_500)
+            .recordResponse("a", "turn-6", localNowMillis = 14_500)
+        assertEquals(1_000L, third.lowestResponseTimeMillis)
+        assertEquals("1.0", third.lowestResponseTimeText())
+
+        val gameOver = third.reduce(thirdTurn.copy(revision = 7, phase = GamePhase.GAME_OVER), 15_000)
+        val restarted = gameOver.reduce(active.copy(revision = 8, number = 1), 16_000)
         assertEquals(0, restarted.responseCount)
         assertEquals("0.0", restarted.averageResponseTimeText())
+        assertEquals(1_000L, restarted.lowestResponseTimeMillis)
     }
 
     @Test
@@ -163,8 +170,47 @@ class GameProtocolTest {
     fun microphoneEligibilityIsOnlyTheConnectedActiveTurn() {
         val state = GameUiState(ConnectionStatus.CONNECTED, active)
         assertTrue(state.isActiveTurn("a"))
+        assertTrue(state.copy(connectionStatus = ConnectionStatus.SOLO).isActiveTurn("a"))
+        assertFalse(state.copy(connectionStatus = ConnectionStatus.SOLO_PENDING).isActiveTurn("a"))
         assertFalse(state.isActiveTurn("b"))
         assertFalse(state.copy(connectionStatus = ConnectionStatus.RECONNECTING).isActiveTurn("a"))
+    }
+
+    @Test
+    fun soloGameAdvancesLocallyAndPreservesRecords() {
+        val solo = GameUiState(bestNumber = 12, lowestResponseTimeMillis = 2_500)
+            .startSoloGame("a", "🚀", nowMillis = 1_000)
+
+        assertEquals(ConnectionStatus.SOLO, solo.connectionStatus)
+        assertEquals(1, solo.snapshot?.number)
+        assertEquals(8_000, solo.snapshot?.deadline)
+        assertEquals(listOf(RosterPlayer("a", "🚀")), solo.roster?.players)
+        assertTrue(solo.isActiveTurn("a"))
+
+        val turnId = requireNotNull(solo.snapshot?.turnId)
+        val answered = solo.answerSolo("a", turnId, correct = true, nowMillis = 2_500)
+        assertEquals(GamePhase.ACTIVE, answered.snapshot?.phase)
+        assertEquals(2, answered.snapshot?.number)
+        assertEquals(9_500, answered.snapshot?.deadline)
+        assertEquals(1, answered.responseCount)
+        assertEquals(1_500, answered.responseTimeTotalMillis)
+        assertEquals(12, answered.bestNumber)
+        assertEquals(1_500, answered.lowestResponseTimeMillis)
+    }
+
+    @Test
+    fun soloGameEndsOnWrongAnswerOrDeadline() {
+        val solo = GameUiState().startSoloGame("a", "🚀", nowMillis = 1_000, startingNumber = 7)
+        val turnId = requireNotNull(solo.snapshot?.turnId)
+        val wrong = solo.answerSolo("a", turnId, correct = false, nowMillis = 2_000)
+        assertEquals(GamePhase.GAME_OVER, wrong.snapshot?.phase)
+        assertEquals(GameOverReason.WRONG_ANSWER, wrong.snapshot?.gameOverReason)
+        assertEquals("a", wrong.snapshot?.failedSessionId)
+
+        val timedOut = solo.timeoutSolo("a", turnId, nowMillis = 8_000)
+        assertEquals(GamePhase.GAME_OVER, timedOut.snapshot?.phase)
+        assertEquals(GameOverReason.TIMEOUT, timedOut.snapshot?.gameOverReason)
+        assertFalse(timedOut.isActiveTurn("a"))
     }
 
     @Test
@@ -185,13 +231,13 @@ class GameProtocolTest {
             connectionStatus = ConnectionStatus.CONNECTED,
             snapshot = active,
             bestNumber = 17,
-            highestResponseTimeMillis = 2_400,
+            lowestResponseTimeMillis = 2_400,
         )
         val stopped = focused.afterFocusLoss()
         assertEquals(ConnectionStatus.REJOIN, stopped.connectionStatus)
         assertNull(stopped.snapshot)
         assertEquals(17, stopped.bestNumber)
-        assertEquals(2_400L, stopped.highestResponseTimeMillis)
+        assertEquals(2_400L, stopped.lowestResponseTimeMillis)
         assertEquals(listOf(500L, 1_000L, 2_000L, 4_000L, 8_000L, 8_000L), (0..5).map(::reconnectDelayMillis))
     }
 }

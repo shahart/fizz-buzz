@@ -21,18 +21,18 @@ kotlin {
                 implementation(compose.material3)
                 implementation(compose.components.resources)
                 implementation(compose.ui)
-                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
-                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
-                implementation("io.ktor:ktor-client-core:3.5.1")
-                implementation("io.ktor:ktor-client-websockets:3.5.1")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
+                implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
+                implementation("io.ktor:ktor-client-core:3.5.2")
+                implementation("io.ktor:ktor-client-websockets:3.5.2")
             }
         }
         androidMain {
             kotlin.srcDir("../composeApp/src/androidMain/kotlin")
             dependencies {
-                implementation("androidx.activity:activity-compose:1.11.0")
-                implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.4")
-                implementation("io.ktor:ktor-client-okhttp:3.5.1")
+                implementation("androidx.activity:activity-compose:1.13.0")
+                implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
+                implementation("io.ktor:ktor-client-okhttp:3.5.2")
             }
         }
     }
@@ -48,7 +48,7 @@ compose.resources {
 
 android {
     namespace = "com.shahartal.fizzbuzz"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.shahartal.fizzbuzz"

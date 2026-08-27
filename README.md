@@ -59,3 +59,5 @@ When `apiKey`, `appId`, and `measurementId` are present, Analytics starts automa
 Deploy from `worker/` with `npm run deploy`. No account, credentials, room codes, or free-text player names are used. Each player chooses a nickname from the built-in emoji list; it is remembered in Android SharedPreferences or browser local storage and sent to the game Worker. At game over, the emoji belonging to the fastest average response-time rank is shown as the winner (including every rank-one emoji in a tie).
 
 The app opens its WebSocket and requests microphone access only after **Join game**. Browser speech input requires the Web Speech API and microphone permission; the answer buttons work without speech support. Hiding the page or backgrounding Android leaves the roster and requires **Rejoin game** on return.
+
+If the WebSocket cannot connect or an active connection is lost, the app offers a local single-player round. The seven-second countdown starts only after the player acknowledges the offline message. Solo play supports voice and touch answers and saved records without requiring internet access.

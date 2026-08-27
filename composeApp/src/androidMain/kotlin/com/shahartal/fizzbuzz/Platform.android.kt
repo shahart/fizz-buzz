@@ -35,12 +35,13 @@ actual fun rememberBestNumberStore(): BestNumberStore {
                 if (value > load()) preferences.edit().putInt("best_number", value).apply()
             }
 
-            override fun loadHighestResponseTimeMillis(): Long =
-                preferences.getLong("highest_response_time_millis", 0L).coerceAtLeast(0L)
+            override fun loadLowestResponseTimeMillis(): Long =
+                preferences.getLong("lowest_response_time_millis", 0L).coerceAtLeast(0L)
 
-            override fun saveHighestResponseTimeMillis(value: Long) {
-                if (value > loadHighestResponseTimeMillis()) {
-                    preferences.edit().putLong("highest_response_time_millis", value).apply()
+            override fun saveLowestResponseTimeMillis(value: Long) {
+                val previous = loadLowestResponseTimeMillis()
+                if (value >= 0L && (previous == 0L || value < previous)) {
+                    preferences.edit().putLong("lowest_response_time_millis", value).apply()
                 }
             }
 

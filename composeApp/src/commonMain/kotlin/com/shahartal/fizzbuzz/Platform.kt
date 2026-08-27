@@ -11,8 +11,8 @@ expect fun gameWebSocketUrl(sessionId: String, nickname: String): String
 interface BestNumberStore {
     fun load(): Int
     fun save(value: Int)
-    fun loadHighestResponseTimeMillis(): Long
-    fun saveHighestResponseTimeMillis(value: Long)
+    fun loadLowestResponseTimeMillis(): Long
+    fun saveLowestResponseTimeMillis(value: Long)
     fun loadNickname(): String?
     fun saveNickname(value: String)
 }

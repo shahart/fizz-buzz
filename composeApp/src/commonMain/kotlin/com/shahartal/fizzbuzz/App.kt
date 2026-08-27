@@ -1,9 +1,6 @@
 package com.shahartal.fizzbuzz
 
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -63,9 +60,10 @@ import fizz_buzz.composeapp.generated.resources.boom
 import fizz_buzz.composeapp.generated.resources.choose_emoji
 import fizz_buzz.composeapp.generated.resources.choose_nickname
 import fizz_buzz.composeapp.generated.resources.connected_players
+import fizz_buzz.composeapp.generated.resources.continue_solo
 import fizz_buzz.composeapp.generated.resources.dismiss_roster
 import fizz_buzz.composeapp.generated.resources.instructions
-import fizz_buzz.composeapp.generated.resources.highest_response_time
+import fizz_buzz.composeapp.generated.resources.lowest_response_time
 import fizz_buzz.composeapp.generated.resources.join_game
 import fizz_buzz.composeapp.generated.resources.joining
 import fizz_buzz.composeapp.generated.resources.layout_direction
@@ -82,6 +80,8 @@ import fizz_buzz.composeapp.generated.resources.response_time_unranked
 import fizz_buzz.composeapp.generated.resources.rejoin_game
 import fizz_buzz.composeapp.generated.resources.someone_else_timed_out
 import fizz_buzz.composeapp.generated.resources.someone_else_wrong_answer
+import fizz_buzz.composeapp.generated.resources.solo_mode_message
+import fizz_buzz.composeapp.generated.resources.solo_mode_title
 import fizz_buzz.composeapp.generated.resources.speech_unavailable
 import fizz_buzz.composeapp.generated.resources.time_is_up
 import fizz_buzz.composeapp.generated.resources.waiting
@@ -97,6 +97,7 @@ private val Sky = Color(0xFFEAF4FF)
 private val Blue = Color(0xFF1473E6)
 private val Red = Color(0xFFD92D20)
 private const val MICROPHONE_SETTLE_MILLIS = 150L
+private const val FAILURE_FLASH_COUNT = 2
 
 @Composable
 fun App(compact: Boolean = false) {
@@ -146,7 +147,7 @@ private fun MultiplayerGame(compact: Boolean) {
             scope,
             nickname = nickname ?: DEFAULT_EMOJI_NICKNAME,
             initialBestNumber = bestNumberStore.load(),
-            initialHighestResponseTimeMillis = bestNumberStore.loadHighestResponseTimeMillis(),
+            initialLowestResponseTimeMillis = bestNumberStore.loadLowestResponseTimeMillis(),
         )
     }
     val uiState by session.state.collectAsState()
@@ -155,15 +156,16 @@ private fun MultiplayerGame(compact: Boolean) {
     var lastHeard by remember { mutableStateOf<String?>(null) }
     var now by remember { mutableLongStateOf(currentTimeMillis()) }
     var soundedRevision by remember { mutableLongStateOf(-1) }
-    var temporaryFailureBlink by remember { mutableStateOf(false) }
+    var failureBlinking by remember { mutableStateOf(false) }
+    val failureFlashAlpha = remember { Animatable(1f) }
     val contentScrollState = rememberScrollState()
     val activeTurn = uiState.isActiveTurn(session.sessionId)
 
     LaunchedEffect(uiState.bestNumber) {
         bestNumberStore.save(uiState.bestNumber)
     }
-    LaunchedEffect(uiState.highestResponseTimeMillis) {
-        bestNumberStore.saveHighestResponseTimeMillis(uiState.highestResponseTimeMillis)
+    LaunchedEffect(uiState.lowestResponseTimeMillis) {
+        bestNumberStore.saveLowestResponseTimeMillis(uiState.lowestResponseTimeMillis)
     }
 
     DisposableEffect(session) { onDispose(session::close) }
@@ -213,16 +215,19 @@ private fun MultiplayerGame(compact: Boolean) {
     }
 
     LaunchedEffect(snapshot?.revision, snapshot?.failedSessionId) {
-        temporaryFailureBlink = false
+        failureBlinking = false
+        failureFlashAlpha.snapTo(1f)
         val current = snapshot ?: return@LaunchedEffect
         if (
             current.phase == GamePhase.GAME_OVER &&
-            current.gameOverReason != GameOverReason.NO_PLAYERS &&
-            current.failedByAnotherPlayer(session.sessionId)
+            current.gameOverReason != GameOverReason.NO_PLAYERS
         ) {
-            temporaryFailureBlink = true
-            delay(2_000)
-            temporaryFailureBlink = false
+            failureBlinking = true
+            repeat(FAILURE_FLASH_COUNT) {
+                failureFlashAlpha.animateTo(0.2f, tween(260))
+                failureFlashAlpha.animateTo(1f, tween(260))
+            }
+            failureBlinking = false
         }
     }
 
@@ -231,17 +236,8 @@ private fun MultiplayerGame(compact: Boolean) {
     }
 
     val failed = snapshot?.phase == GamePhase.GAME_OVER && snapshot.gameOverReason != GameOverReason.NO_PLAYERS
-    val currentPlayerFailed = failed && snapshot.failedSessionId == session.sessionId
-    val shouldBlink = currentPlayerFailed || temporaryFailureBlink
-    val flash = rememberInfiniteTransition(label = "game over flash")
-    val flashAlpha by flash.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(tween(260), RepeatMode.Reverse),
-        label = "game over alpha",
-    )
     val background = when {
-        failed && shouldBlink -> Red.copy(alpha = flashAlpha)
+        failed && failureBlinking -> Red.copy(alpha = failureFlashAlpha.value)
         failed -> Red
         else -> Sky
     }
@@ -270,7 +266,8 @@ private fun MultiplayerGame(compact: Boolean) {
                         )
                         ConnectionStatus.JOINING -> StatusText(stringResource(Res.string.joining))
                         ConnectionStatus.RECONNECTING -> StatusText(stringResource(Res.string.reconnecting))
-                        ConnectionStatus.CONNECTED -> if (snapshot != null) GamePanel(
+                        ConnectionStatus.SOLO_PENDING -> StatusText(stringResource(Res.string.solo_mode_title))
+                        ConnectionStatus.CONNECTED, ConnectionStatus.SOLO -> if (snapshot != null) GamePanel(
                             snapshot = snapshot,
                             sessionId = session.sessionId,
                             activeTurn = activeTurn,
@@ -278,7 +275,7 @@ private fun MultiplayerGame(compact: Boolean) {
                             averageResponseTime = uiState.averageResponseTimeText(session.sessionId),
                             latencyMillis = uiState.latencyMillis,
                             bestNumber = uiState.bestNumber,
-                            highestResponseTime = uiState.highestResponseTimeText(),
+                            lowestResponseTime = uiState.lowestResponseTimeText(),
                             lastHeard = lastHeard,
                             onBoom = { lastHeard = null; snapshot.turnId?.let(session::submitBoom) },
                             onNumber = {
@@ -316,7 +313,22 @@ private fun MultiplayerGame(compact: Boolean) {
                 onDismiss = { showRoster = false },
             )
         }
+        if (uiState.connectionStatus == ConnectionStatus.SOLO_PENDING) {
+            SoloModeDialog(onContinue = session::continueSolo)
+        }
     }
+}
+
+@Composable
+private fun SoloModeDialog(onContinue: () -> Unit) {
+    AlertDialog(
+        onDismissRequest = {},
+        title = { Text(stringResource(Res.string.solo_mode_title), fontWeight = FontWeight.Bold) },
+        text = { Text(stringResource(Res.string.solo_mode_message)) },
+        confirmButton = {
+            Button(onClick = onContinue) { Text(stringResource(Res.string.continue_solo)) }
+        },
+    )
 }
 
 @Composable
@@ -457,7 +469,7 @@ private fun GamePanel(
     averageResponseTime: String,
     latencyMillis: Long?,
     bestNumber: Int,
-    highestResponseTime: String,
+    lowestResponseTime: String,
     lastHeard: String?,
     onBoom: () -> Unit,
     onNumber: () -> Unit,
@@ -568,7 +580,7 @@ private fun GamePanel(
         textAlign = TextAlign.Center,
     )
     Text(
-        text = stringResource(Res.string.highest_response_time, highestResponseTime),
+        text = stringResource(Res.string.lowest_response_time, lowestResponseTime),
         color = if (failed) Color.White.copy(alpha = .9f) else Navy.copy(alpha = .7f),
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,

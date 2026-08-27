@@ -19,6 +19,9 @@
     <string name="rejoin_game">Rejoin game</string>
     <string name="joining">Joining the global game…</string>
     <string name="reconnecting">Connection lost — reconnecting…</string>
+    <string name="solo_mode_title">Playing offline</string>
+    <string name="solo_mode_message">The global game is unavailable. You can continue in single-player mode.</string>
+    <string name="continue_solo">Continue</string>
     <string name="waiting">Waiting</string>
     <string name="your_turn">Your turn</string>
     <string name="connected_players">%1$d players connected</string>
@@ -26,7 +29,7 @@
     <string name="roster_loading">Loading players…</string>
     <string name="dismiss_roster">Close</string>
     <string name="record">Record: %1$d</string>
-    <string name="highest_response_time">Highest response time: %1$s seconds</string>
+    <string name="lowest_response_time">Lowest response time: %1$s seconds</string>
     <string name="average_response_time">Average response time: %1$s seconds</string>
     <string name="response_time_rank">Response-time rank: %1$d of %2$d</string>
     <string name="response_time_unranked">Response-time rank: —</string>

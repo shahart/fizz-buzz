@@ -83,7 +83,7 @@ fun GameSnapshot.winningNicknames(): List<String> =
         .mapNotNull { it.nickname?.takeIf(::isEmojiNickname) }
         .distinct()
 
-enum class ConnectionStatus { IDLE, JOINING, CONNECTED, RECONNECTING, REJOIN }
+enum class ConnectionStatus { IDLE, JOINING, CONNECTED, RECONNECTING, REJOIN, SOLO_PENDING, SOLO }
 
 data class GameUiState(
     val connectionStatus: ConnectionStatus = ConnectionStatus.IDLE,
@@ -94,10 +94,10 @@ data class GameUiState(
     val responseCount: Int = 0,
     val latencyMillis: Long? = null,
     val bestNumber: Int = 0,
-    val highestResponseTimeMillis: Long = 0,
+    val lowestResponseTimeMillis: Long = 0,
 ) {
     fun isActiveTurn(sessionId: String): Boolean =
-        connectionStatus == ConnectionStatus.CONNECTED &&
+        connectionStatus in setOf(ConnectionStatus.CONNECTED, ConnectionStatus.SOLO) &&
             snapshot?.phase == GamePhase.ACTIVE &&
             snapshot.activeSessionId == sessionId
 
@@ -112,7 +112,11 @@ data class GameUiState(
         return copy(
             responseTimeTotalMillis = responseTimeTotalMillis + elapsed,
             responseCount = responseCount + 1,
-            highestResponseTimeMillis = maxOf(highestResponseTimeMillis, elapsed),
+            lowestResponseTimeMillis = if (lowestResponseTimeMillis == 0L) {
+                elapsed
+            } else {
+                minOf(lowestResponseTimeMillis, elapsed)
+            },
         )
     }
 
@@ -135,8 +139,8 @@ data class GameUiState(
         return "${tenths / 10}.${tenths % 10}"
     }
 
-    fun highestResponseTimeText(): String {
-        val tenths = (highestResponseTimeMillis + 50) / 100
+    fun lowestResponseTimeText(): String {
+        val tenths = (lowestResponseTimeMillis + 50) / 100
         return "${tenths / 10}.${tenths % 10}"
     }
 
@@ -174,6 +178,97 @@ data class GameUiState(
     }
 }
 
+fun GameUiState.startSoloGame(
+    sessionId: String,
+    nickname: String,
+    nowMillis: Long,
+    startingNumber: Int = 1,
+): GameUiState {
+    val revision = (snapshot?.revision ?: 0L) + 1L
+    return copy(
+        connectionStatus = ConnectionStatus.SOLO,
+        snapshot = soloSnapshot(
+            revision = revision,
+            number = startingNumber.coerceAtLeast(1),
+            sessionId = sessionId,
+            nowMillis = nowMillis,
+        ),
+        roster = GameRoster(
+            type = "roster",
+            revision = revision,
+            players = listOf(RosterPlayer(sessionId, nickname)),
+        ),
+        serverClockOffsetMillis = 0,
+        responseTimeTotalMillis = 0,
+        responseCount = 0,
+        latencyMillis = null,
+    )
+}
+
+fun GameUiState.answerSolo(
+    sessionId: String,
+    turnId: String,
+    correct: Boolean,
+    nowMillis: Long,
+): GameUiState {
+    val current = snapshot ?: return this
+    if (connectionStatus != ConnectionStatus.SOLO || !isActiveTurn(sessionId) || current.turnId != turnId) return this
+    if (nowMillis >= (current.deadline ?: 0L)) return timeoutSolo(sessionId, turnId, nowMillis)
+
+    val recorded = recordResponse(sessionId, turnId, nowMillis)
+    if (!correct) return recorded.finishSolo(sessionId, GameOverReason.WRONG_ANSWER, nowMillis)
+
+    val next = soloSnapshot(
+        revision = current.revision + 1L,
+        number = current.number + 1,
+        sessionId = sessionId,
+        nowMillis = nowMillis,
+    )
+    return recorded.reduce(next, nowMillis, sessionId).copy(connectionStatus = ConnectionStatus.SOLO)
+}
+
+fun GameUiState.timeoutSolo(sessionId: String, turnId: String, nowMillis: Long): GameUiState {
+    val current = snapshot ?: return this
+    if (connectionStatus != ConnectionStatus.SOLO || !isActiveTurn(sessionId) || current.turnId != turnId) return this
+    return finishSolo(sessionId, GameOverReason.TIMEOUT, nowMillis)
+}
+
+private fun GameUiState.finishSolo(
+    sessionId: String,
+    reason: GameOverReason,
+    nowMillis: Long,
+): GameUiState {
+    val current = snapshot ?: return this
+    return copy(
+        connectionStatus = ConnectionStatus.SOLO,
+        snapshot = current.copy(
+            revision = current.revision + 1L,
+            phase = GamePhase.GAME_OVER,
+            turnId = null,
+            activeSessionId = null,
+            serverTime = nowMillis,
+            deadline = null,
+            gameOverReason = reason,
+            failedSessionId = sessionId,
+            responseRankings = null,
+        ),
+        serverClockOffsetMillis = 0,
+        latencyMillis = null,
+    )
+}
+
+private fun soloSnapshot(revision: Long, number: Int, sessionId: String, nowMillis: Long) = GameSnapshot(
+    type = "snapshot",
+    revision = revision,
+    phase = GamePhase.ACTIVE,
+    number = number,
+    turnId = "solo-$revision-$number",
+    activeSessionId = sessionId,
+    connectedPlayers = 1,
+    serverTime = nowMillis,
+    deadline = nowMillis + STARTING_SECONDS * 1_000L,
+)
+
 fun reconnectDelayMillis(attempt: Int): Long =
     (500L * (1L shl attempt.coerceIn(0, 4))).coerceAtMost(8_000L)
 
@@ -198,5 +293,5 @@ fun recognitionSubmission(
 fun GameUiState.afterFocusLoss(): GameUiState = GameUiState(
     connectionStatus = ConnectionStatus.REJOIN,
     bestNumber = bestNumber,
-    highestResponseTimeMillis = highestResponseTimeMillis,
+    lowestResponseTimeMillis = lowestResponseTimeMillis,
 )

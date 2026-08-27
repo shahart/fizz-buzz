@@ -29,11 +29,11 @@ actual fun rememberBestNumberStore(): BestNumberStore = remember {
             browserSaveBestNumber(value.toDouble())
         }
 
-        override fun loadHighestResponseTimeMillis(): Long =
-            browserLoadHighestResponseTimeMillis().toLong().coerceAtLeast(0L)
+        override fun loadLowestResponseTimeMillis(): Long =
+            browserLoadLowestResponseTimeMillis().toLong().coerceAtLeast(0L)
 
-        override fun saveHighestResponseTimeMillis(value: Long) {
-            browserSaveHighestResponseTimeMillis(value.toDouble())
+        override fun saveLowestResponseTimeMillis(value: Long) {
+            browserSaveLowestResponseTimeMillis(value.toDouble())
         }
 
         override fun loadNickname(): String? = browserLoadNickname().takeIf(::isEmojiNickname)
@@ -85,23 +85,25 @@ private external fun browserSaveBestNumber(value: Double)
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""() => {
     try {
-        const value = Number(localStorage.getItem('seven-boom-highest-response-time-millis'));
+        const value = Number(localStorage.getItem('seven-boom-lowest-response-time-millis'));
         return Number.isSafeInteger(value) && value >= 0 ? value : 0;
     } catch (_) {
         return 0;
     }
 }""")
-private external fun browserLoadHighestResponseTimeMillis(): Double
+private external fun browserLoadLowestResponseTimeMillis(): Double
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""value => {
     try {
-        const key = 'seven-boom-highest-response-time-millis';
+        const key = 'seven-boom-lowest-response-time-millis';
         const previous = Number(localStorage.getItem(key)) || 0;
-        if (Number.isSafeInteger(value) && value > previous) localStorage.setItem(key, String(value));
+        if (Number.isSafeInteger(value) && value >= 0 && (previous === 0 || value < previous)) {
+            localStorage.setItem(key, String(value));
+        }
     } catch (_) {}
 }""")
-private external fun browserSaveHighestResponseTimeMillis(value: Double)
+private external fun browserSaveLowestResponseTimeMillis(value: Double)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""() => {
