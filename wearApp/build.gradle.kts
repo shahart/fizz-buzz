@@ -1,5 +1,8 @@
 plugins {
     kotlin("multiplatform")
+    // The shared commonMain sources carry @Serializable models, so the
+    // serialization compiler plugin must run for this module as well.
+    kotlin("plugin.serialization")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.compose")
     id("com.android.application")
@@ -51,7 +54,8 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.shahartal.fizzbuzz"
+        // Distinct from the phone app so both can be installed side by side.
+        applicationId = "com.shahartal.fizzbuzz.wear"
         minSdk = 26
         targetSdk = 36
         versionCode = 10_001
