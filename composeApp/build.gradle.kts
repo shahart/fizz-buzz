@@ -63,8 +63,8 @@ android {
         applicationId = "com.shahartal.fizzbuzz"
         minSdk = 23
         targetSdk = 36
-        versionCode = 3
-        versionName = "1.02"
+        versionCode = 4
+        versionName = "1.03"
         val workerUrl = providers.gradleProperty("gameWorkerUrl")
             .orElse("wss://global-seven-boom.lat-shahar.workers.dev/game")
             .get()
@@ -78,6 +78,18 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    buildTypes {
+        release {
+            // R8 removes unused code/resources and obfuscates the release artifact.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
+        }
     }
 }
 

@@ -15,6 +15,9 @@ private class BrowserSpeechRecognizerController : SpeechRecognizerController {
 
     override fun stopListening() = stopBrowserSpeechRecognition()
 
+    override fun consumePartialTranscript(): String? =
+        consumeBrowserSpeechPartial()?.takeIf { it.isNotBlank() }
+
     override fun consumeResults(): List<String>? =
         consumeBrowserSpeechResult()?.let(::listOf)
 }
@@ -40,18 +43,24 @@ private external fun browserSpeechRecognitionSupported(): Boolean
             window.__countdownRecognition.abort();
         }
         window.__countdownSpeechResult = null;
+        window.__countdownSpeechPartial = null;
         window.__countdownSpeechDetected = false;
         window.__countdownRecognitionActive = true;
         const recognition = new SpeechRecognition();
         window.__countdownRecognition = recognition;
         recognition.lang = navigator.language || 'en-US';
         recognition.continuous = false;
-        recognition.interimResults = false;
+        recognition.interimResults = true;
         recognition.maxAlternatives = 1;
         recognition.onspeechstart = () => { window.__countdownSpeechDetected = true; };
         recognition.onresult = event => {
-            window.__countdownSpeechResult = event.results[0][0].transcript;
-            window.__countdownRecognitionActive = false;
+            const result = event.results[event.results.length - 1];
+            if (result.isFinal) {
+                window.__countdownSpeechResult = result[0].transcript;
+                window.__countdownRecognitionActive = false;
+            } else {
+                window.__countdownSpeechPartial = result[0].transcript;
+            }
         };
         recognition.onerror = event => {
             if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
@@ -79,6 +88,16 @@ private external fun startBrowserSpeechRecognition()
     }""",
 )
 private external fun stopBrowserSpeechRecognition()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun(
+    """() => {
+        const partial = window.__countdownSpeechPartial;
+        window.__countdownSpeechPartial = null;
+        return partial == null ? null : String(partial);
+    }""",
+)
+private external fun consumeBrowserSpeechPartial(): String?
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun(

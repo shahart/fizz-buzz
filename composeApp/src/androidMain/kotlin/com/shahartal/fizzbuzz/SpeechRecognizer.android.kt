@@ -31,8 +31,8 @@ private class AndroidSpeechRecognizerController(
         putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
         putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
         putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 5)
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 700L)
-        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 500L)
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1_400L)
+        putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1_000L)
     }
     private var results: List<String>? = null
     private var latestPartial: String? = null
@@ -83,6 +83,8 @@ private class AndroidSpeechRecognizerController(
 
     override fun consumeResults(): List<String>? = results.also { results = null }
 
+    override fun consumePartialTranscript(): String? = latestPartial?.takeIf(String::isNotBlank)
+
     fun destroy() {
         active = false
         destroyed = true
@@ -111,8 +113,10 @@ private class AndroidSpeechRecognizerController(
         if (active && publishLatestPartial()) return
         when (error) {
             SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> active = false
-            SpeechRecognizer.ERROR_CLIENT -> if (active) scheduleStart(RETRY_DELAY_MILLIS)
             SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> if (active) scheduleStart(BUSY_RETRY_DELAY_MILLIS)
+            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT ->
+                if (active) scheduleStart(SILENCE_RETRY_DELAY_MILLIS)
+            SpeechRecognizer.ERROR_CLIENT -> if (active) scheduleStart(RETRY_DELAY_MILLIS)
             else -> if (active) scheduleStart(RETRY_DELAY_MILLIS)
         }
     }
@@ -185,6 +189,7 @@ private class AndroidSpeechRecognizerController(
         private const val TAG = "FizzBuzzSpeech"
         private const val RETRY_DELAY_MILLIS = 250L
         private const val BUSY_RETRY_DELAY_MILLIS = 650L
+        private const val SILENCE_RETRY_DELAY_MILLIS = 900L
         private const val PARTIAL_RESULT_FALLBACK_MILLIS = 500L
     }
 }

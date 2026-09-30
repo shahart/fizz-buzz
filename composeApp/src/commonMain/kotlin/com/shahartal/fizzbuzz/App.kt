@@ -193,6 +193,13 @@ private fun MultiplayerGame(compact: Boolean) {
         try {
             while (true) {
                 delay(100)
+                speech.consumePartialTranscript()?.let { partial ->
+                    if (partial.matchesAnswerFor(snapshot.number)) {
+                        lastHeard = partial
+                        session.submitRecognition(turnId, listOf(partial))
+                        return@LaunchedEffect
+                    }
+                }
                 val alternatives = speech.consumeResults() ?: continue
                 lastHeard = alternatives.firstOrNull()
                 session.submitRecognition(turnId, alternatives)

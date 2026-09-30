@@ -7,6 +7,7 @@ interface SpeechRecognizerController {
     val hasDetectedSpeech: Boolean
     fun startListening()
     fun stopListening()
+    fun consumePartialTranscript(): String?
     fun consumeResults(): List<String>?
 }
 
