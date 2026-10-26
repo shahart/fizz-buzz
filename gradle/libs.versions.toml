@@ -1,3 +1,42 @@
 [versions]
+kotlin = "2.3.21"
+kotlin-compose = "2.4.20"
+compose-multiplatform = "1.12.1"
+compose-material3 = "1.9.0"
+android-gradle-plugin = "9.4.1"
+google-services = "4.5.0"
+activity-compose = "1.13.0"
+fragment = "1.9.1"
+lifecycle = "2.11.0"
+firebase-analytics = "24.0.0"
+ktor = "3.6.0"
+ktor-wear = "3.5.2"
+kotlinx-coroutines = "1.11.0"
+kotlinx-serialization = "1.11.0"
 
 [libraries]
+compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
+compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "compose-material3" }
+compose-resources = { module = "org.jetbrains.compose.components:components-resources", version.ref = "compose-multiplatform" }
+compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "compose-multiplatform" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activity-compose" }
+fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
+lifecycle-runtime-compose = { module = "androidx.lifecycle:lifecycle-runtime-compose", version.ref = "lifecycle" }
+firebase-analytics = { module = "com.google.firebase:firebase-analytics", version.ref = "firebase-analytics" }
+ktor-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor" }
+ktor-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor" }
+ktor-client-js = { module = "io.ktor:ktor-client-js", version.ref = "ktor" }
+ktor-wear-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor-wear" }
+ktor-wear-client-core = { module = "io.ktor:ktor-client-core", version.ref = "ktor-wear" }
+ktor-wear-client-websockets = { module = "io.ktor:ktor-client-websockets", version.ref = "ktor-wear" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "kotlinx-coroutines" }
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+
+[plugins]
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin-compose" }
+compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
+android-application = { id = "com.android.application", version.ref = "android-gradle-plugin" }
+google-services = { id = "com.google.gms.google-services", version.ref = "google-services" }

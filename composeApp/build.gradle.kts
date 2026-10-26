@@ -1,11 +1,11 @@
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
 
 plugins {
-    kotlin("multiplatform")
-    kotlin("plugin.serialization")
-    id("org.jetbrains.kotlin.plugin.compose")
-    id("org.jetbrains.compose")
-    id("com.android.application")
+    alias(libs.plugins.kotlin.multiplatform)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.compose.multiplatform)
+    alias(libs.plugins.android.application)
 }
 
 // Firebase's generated Android resources require the app-specific config file.
@@ -30,24 +30,27 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(compose.runtime)
-            implementation(compose.foundation)
-            implementation(compose.material3)
-            implementation(compose.components.resources)
-            implementation(compose.ui)
-            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.11.0")
-            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
-            implementation("io.ktor:ktor-client-core:3.5.2")
-            implementation("io.ktor:ktor-client-websockets:3.5.2")
+            implementation(libs.compose.runtime)
+            implementation(libs.compose.foundation)
+            implementation(libs.compose.material3)
+            implementation(libs.compose.resources)
+            implementation(libs.compose.ui)
+            implementation(libs.kotlinx.coroutines.core)
+            implementation(libs.kotlinx.serialization.json)
+            implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.websockets)
         }
         androidMain.dependencies {
-            implementation("androidx.activity:activity-compose:1.13.0")
-            implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
-            implementation("com.google.firebase:firebase-analytics:23.2.0")
-            implementation("io.ktor:ktor-client-okhttp:3.5.2")
+            implementation(libs.activity.compose)
+            // Firebase Analytics brings Fragment 1.1.0 transitively; pin a
+            // maintained version so it isn't packaged in the Android release.
+            implementation(libs.fragment)
+            implementation(libs.lifecycle.runtime.compose)
+            implementation(libs.firebase.analytics)
+            implementation(libs.ktor.wear.client.okhttp)
         }
         wasmJsMain.dependencies {
-            implementation("io.ktor:ktor-client-js:3.5.2")
+            implementation(libs.ktor.client.js)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -61,7 +64,7 @@ android {
 
     defaultConfig {
         applicationId = "com.shahartal.fizzbuzz"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 36
         versionCode = 4
         versionName = "1.03"
