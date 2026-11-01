@@ -41,6 +41,12 @@ actual fun rememberBestNumberStore(): BestNumberStore = remember {
         override fun saveNickname(value: String) {
             if (isEmojiNickname(value)) browserSaveNickname(value)
         }
+
+        override fun loadTheme(): String = browserLoadTheme()
+
+        override fun saveTheme(value: String) {
+            if (value in setOf("classic", "mint", "sunset", "midnight")) browserSaveTheme(value)
+        }
     }
 }
 
@@ -120,6 +126,19 @@ private external fun browserLoadNickname(): String
     try { localStorage.setItem('seven-boom-nickname-emoji', value); } catch (_) {}
 }""")
 private external fun browserSaveNickname(value: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""() => {
+    try {
+        const value = localStorage.getItem('seven-boom-theme');
+        return ['classic', 'mint', 'sunset', 'midnight'].includes(value) ? value : 'classic';
+    } catch (_) { return 'classic'; }
+}""")
+private external fun browserLoadTheme(): String
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""value => { try { localStorage.setItem('seven-boom-theme', value); } catch (_) {} }""")
+private external fun browserSaveTheme(value: String)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""(sessionId, nickname) => {

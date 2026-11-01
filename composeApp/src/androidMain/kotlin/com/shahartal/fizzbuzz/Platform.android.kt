@@ -51,6 +51,14 @@ actual fun rememberBestNumberStore(): BestNumberStore {
             override fun saveNickname(value: String) {
                 if (isEmojiNickname(value)) preferences.edit().putString("nickname_emoji", value).apply()
             }
+
+            override fun loadTheme(): String = preferences.getString("theme_id", "classic") ?: "classic"
+
+            override fun saveTheme(value: String) {
+                if (value in setOf("classic", "mint", "sunset", "midnight")) {
+                    preferences.edit().putString("theme_id", value).apply()
+                }
+            }
         }
     }
 }

@@ -65,6 +65,17 @@
     <string name="dismiss_roster">סגירה</string>
     <string name="average_response_time">זמן תגובה ממוצע: %1$s שניות</string>
     <string name="record">שיא: %1$d</string>
+    <string name="personal_records">השיאים האישיים שלך</string>
+    <string name="choose_theme">ערכת צבעים: %1$s</string>
+    <string name="theme_classic">קלאסית</string>
+    <string name="theme_mint">מנטה</string>
+    <string name="theme_sunset">שקיעה</string>
+    <string name="theme_midnight">חצות</string>
+    <string name="theme_locked">נדרש שיא של %1$d לפתיחה</string>
+    <string name="feedback_divisible_by_seven">%1$d מתחלק ב־7, לכן התשובה היא בום.</string>
+    <string name="feedback_correct_number">התשובה הנכונה הייתה %1$d.</string>
+    <string name="feedback_contains_seven">הספרה 7 מופיעה ב־%1$d, לכן התשובה היא בום.</string>
+    <string name="feedback_divisible_and_contains">%1$d מתחלק ב־7 וגם מכיל 7, לכן התשובה היא בום.</string>
     <string name="lowest_response_time">זמן התגובה הקצר ביותר: %1$s שניות</string>
     <string name="response_time_rank">דירוג זמן תגובה: %1$d מתוך %2$d</string>
     <string name="response_time_unranked">דירוג זמן תגובה: —</string>

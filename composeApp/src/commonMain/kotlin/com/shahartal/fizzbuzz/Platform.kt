@@ -15,6 +15,8 @@ interface BestNumberStore {
     fun saveLowestResponseTimeMillis(value: Long)
     fun loadNickname(): String?
     fun saveNickname(value: String)
+    fun loadTheme(): String
+    fun saveTheme(value: String)
 }
 
 @Composable

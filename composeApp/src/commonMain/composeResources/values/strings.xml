@@ -29,6 +29,17 @@
     <string name="roster_loading">Loading players…</string>
     <string name="dismiss_roster">Close</string>
     <string name="record">Record: %1$d</string>
+    <string name="personal_records">Personal records</string>
+    <string name="choose_theme">Theme: %1$s</string>
+    <string name="theme_classic">Classic</string>
+    <string name="theme_mint">Mint</string>
+    <string name="theme_sunset">Sunset</string>
+    <string name="theme_midnight">Midnight</string>
+    <string name="theme_locked">best %1$d to unlock</string>
+    <string name="feedback_divisible_by_seven">%1$d is divisible by 7, so the answer is BOOM.</string>
+    <string name="feedback_correct_number">The correct answer was %1$d.</string>
+    <string name="feedback_contains_seven">%1$d contains the digit 7, so the answer is BOOM.</string>
+    <string name="feedback_divisible_and_contains">%1$d is divisible by 7 and contains 7, so the answer is BOOM.</string>
     <string name="lowest_response_time">Lowest response time: %1$s seconds</string>
     <string name="average_response_time">Average response time: %1$s seconds</string>
     <string name="response_time_rank">Response-time rank: %1$d of %2$d</string>
