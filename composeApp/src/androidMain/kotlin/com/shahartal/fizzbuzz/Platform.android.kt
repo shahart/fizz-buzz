@@ -23,6 +23,11 @@ actual fun gameWebSocketUrl(sessionId: String, nickname: String): String =
         .build()
         .toString()
 
+actual val supportsWebKeyboardControls: Boolean = false
+
+@Composable
+actual fun ObserveWebKeyboardControls(enabled: Boolean, onLeft: () -> Unit, onRight: () -> Unit) = Unit
+
 @Composable
 actual fun rememberBestNumberStore(): BestNumberStore {
     val context = LocalContext.current.applicationContext

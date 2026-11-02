@@ -20,6 +20,16 @@ actual fun anonymousSessionId(): String = browserUuid()
 @OptIn(ExperimentalWasmJsInterop::class)
 actual fun gameWebSocketUrl(sessionId: String, nickname: String): String = browserGameUrl(sessionId, nickname)
 
+actual val supportsWebKeyboardControls: Boolean = true
+
+@Composable
+actual fun ObserveWebKeyboardControls(enabled: Boolean, onLeft: () -> Unit, onRight: () -> Unit) {
+    DisposableEffect(enabled, onLeft, onRight) {
+        val cleanup = if (enabled) observeKeyboard(onLeft, onRight) else null
+        onDispose { cleanup?.invoke() }
+    }
+}
+
 @Composable
 actual fun rememberBestNumberStore(): BestNumberStore = remember {
     object : BestNumberStore {
@@ -171,3 +181,20 @@ private external fun browserGameUrl(sessionId: String, nickname: String): String
     };
 }""")
 private external fun observeVisibility(hidden: () -> Unit, visible: () -> Unit): () -> Unit
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""(left, right) => {
+    const onKeyDown = event => {
+        if (event.repeat) return;
+        if (event.key === 'ArrowLeft') {
+            event.preventDefault();
+            left();
+        } else if (event.key === 'ArrowRight') {
+            event.preventDefault();
+            right();
+        }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+}""")
+private external fun observeKeyboard(left: () -> Unit, right: () -> Unit): () -> Unit

@@ -6,7 +6,7 @@ pluginManagement {
     }
 }
 plugins {
-    id("org.gradle.toolchains.foojay-resolver-convention") version "0.10.0"
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
 dependencyResolutionManagement {
@@ -18,4 +18,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "fizz-buzz"
 include(":composeApp")
-include(":wearApp")
+// include(":wearApp") // Wear OS version intentionally excluded from Gradle builds.

@@ -5,6 +5,7 @@
     <string name="choose_nickname">Your emoji nickname</string>
     <string name="choose_emoji">Choose an emoji</string>
     <string name="instructions">Say or tap the number — use BOOM 💣 for multiples of 7 and numbers containing 7</string>
+    <string name="keyboard_hint">Use ← or → to press the matching button.</string>
     <string name="speech_unavailable">Speech recognition is not available on this device — use the buttons to play</string>
     <string name="start_game">Start game</string>
     <string name="boom">BOOM 💣</string>

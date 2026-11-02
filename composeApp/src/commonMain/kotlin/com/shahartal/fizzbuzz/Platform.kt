@@ -22,5 +22,10 @@ interface BestNumberStore {
 @Composable
 expect fun rememberBestNumberStore(): BestNumberStore
 
+expect val supportsWebKeyboardControls: Boolean
+
+@Composable
+expect fun ObserveWebKeyboardControls(enabled: Boolean, onLeft: () -> Unit, onRight: () -> Unit)
+
 @Composable
 expect fun ObserveGameLifecycle(onStopped: () -> Unit, onResumed: () -> Unit)

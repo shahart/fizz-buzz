@@ -1,4 +1,7 @@
 import org.jetbrains.kotlin.gradle.ExperimentalWasmDsl
+import com.android.build.api.dsl.ApplicationExtension
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import com.android.build.api.variant.HostTestBuilder
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -58,7 +61,7 @@ kotlin {
     }
 }
 
-android {
+extensions.configure<ApplicationExtension> {
     namespace = "com.shahartal.fizzbuzz"
     compileSdk = 37
 
@@ -66,8 +69,8 @@ android {
         applicationId = "com.shahartal.fizzbuzz"
         minSdk = 24
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.03"
+        versionCode = 6
+        versionName = "1.04"
         val workerUrl = providers.gradleProperty("gameWorkerUrl")
             .orElse("wss://global-seven-boom.lat-shahar.workers.dev/game")
             .get()
@@ -77,6 +80,10 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
     }
 
     buildFeatures {
@@ -92,6 +99,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+    }
+}
+
+extensions.configure<ApplicationAndroidComponentsExtension> {
+    beforeVariants(selector().all()) { variant ->
+        if (variant.buildType == "release") {
+            variant.hostTests[HostTestBuilder.UNIT_TEST_TYPE]?.enable = true
         }
     }
 }

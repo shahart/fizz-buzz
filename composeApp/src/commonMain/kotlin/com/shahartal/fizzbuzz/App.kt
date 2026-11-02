@@ -65,6 +65,7 @@ import fizz_buzz.composeapp.generated.resources.connected_players
 import fizz_buzz.composeapp.generated.resources.continue_solo
 import fizz_buzz.composeapp.generated.resources.dismiss_roster
 import fizz_buzz.composeapp.generated.resources.instructions
+import fizz_buzz.composeapp.generated.resources.keyboard_hint
 import fizz_buzz.composeapp.generated.resources.lowest_response_time
 import fizz_buzz.composeapp.generated.resources.personal_records
 import fizz_buzz.composeapp.generated.resources.join_game
@@ -182,6 +183,26 @@ private fun MultiplayerGame(compact: Boolean) {
     val failureFlashAlpha = remember { Animatable(1f) }
     val contentScrollState = rememberScrollState()
     val activeTurn = uiState.isActiveTurn(session.sessionId)
+    val numberAction = remember(session, snapshot?.turnId, snapshot?.number) {
+        {
+            lastHeard = null
+            snapshot?.let { current -> current.turnId?.let { session.submitNumber(it, current.number) } }
+            Unit
+        }
+    }
+    val boomAction = remember(session, snapshot?.turnId) {
+        {
+            lastHeard = null
+            snapshot?.turnId?.let(session::submitBoom)
+            Unit
+        }
+    }
+    val isRtlLayout = LocalLayoutDirection.current == LayoutDirection.Rtl
+    ObserveWebKeyboardControls(
+        enabled = activeTurn && !showRoster && !showNicknamePicker && !showThemePicker,
+        onLeft = if (isRtlLayout) numberAction else boomAction,
+        onRight = if (isRtlLayout) boomAction else numberAction,
+    )
 
     LaunchedEffect(uiState.bestNumber) {
         bestNumberStore.save(uiState.bestNumber)
@@ -312,13 +333,8 @@ private fun MultiplayerGame(compact: Boolean) {
                             bestNumber = uiState.bestNumber,
                             lowestResponseTime = uiState.lowestResponseTimeText(),
                             lastHeard = lastHeard,
-                            onBoom = { lastHeard = null; snapshot.turnId?.let(session::submitBoom) },
-                            onNumber = {
-                                lastHeard = null
-                                snapshot.let { current ->
-                                    current.turnId?.let { turnId -> session.submitNumber(turnId, current.number) }
-                                }
-                            },
+                            onBoom = boomAction,
+                            onNumber = numberAction,
                             onRestart = session::restart,
                             onShowRoster = { showRoster = true },
                             compact = compact,
@@ -670,6 +686,14 @@ private fun GamePanel(
             onNumber = onNumber,
             compact = compact,
         )
+        if (supportsWebKeyboardControls) {
+            Text(
+                text = stringResource(Res.string.keyboard_hint),
+                color = palette.navy.copy(alpha = .6f),
+                fontSize = if (compact) 10.sp else 12.sp,
+                textAlign = TextAlign.Center,
+            )
+        }
     }
     if (activeTurn && lastHeard != null) {
         Spacer(Modifier.height(12.dp))
