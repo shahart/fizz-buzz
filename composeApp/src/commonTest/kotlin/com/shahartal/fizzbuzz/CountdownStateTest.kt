@@ -38,6 +38,10 @@ class CountdownStateTest {
 
     @Test
     fun regularNumbersAcceptDigitsAndEnglishWords() {
+        assertTrue("one".matchesAnswerFor(1))
+        assertTrue("ואן".matchesAnswerFor(1))
+        assertTrue("וואן".matchesAnswerFor(1))
+        assertTrue("1".matchesAnswerFor(1))
         assertTrue("43".matchesAnswerFor(43))
         assertTrue("forty three".matchesAnswerFor(43))
         assertTrue("חמש".matchesAnswerFor(5))

@@ -19,6 +19,9 @@ actual fun anonymousSessionId(): String = browserUuid()
 
 @OptIn(ExperimentalWasmJsInterop::class)
 actual fun gameWebSocketUrl(sessionId: String, nickname: String): String = browserGameUrl(sessionId, nickname)
+actual fun logGameEvent(event: String, details: String) {
+    println("[SevenBoom] $event $details")
+}
 
 actual val supportsWebKeyboardControls: Boolean = true
 
@@ -159,8 +162,10 @@ private external fun browserSaveTheme(value: String)
     const endpoint = isWebpackDevelopmentServer
         ? 'wss://global-seven-boom.lat-shahar.workers.dev/game'
         : (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/game';
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
     return endpoint + '?sessionId=' + encodeURIComponent(sessionId) +
-        '&nickname=' + encodeURIComponent(nickname);
+        '&nickname=' + encodeURIComponent(nickname) +
+        '&timeZone=' + encodeURIComponent(timeZone);
 }""")
 private external fun browserGameUrl(sessionId: String, nickname: String): String
 

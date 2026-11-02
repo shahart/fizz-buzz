@@ -7,6 +7,17 @@ function game() {
 }
 
 describe("global game rules", () => {
+  it("stores timezone and country metadata and updates it for a reconnecting player", () => {
+    const engine = game();
+    engine.join("a", 0, "🦊", "America/Los_Angeles", "us");
+    expect(engine.players[0]).toMatchObject({ timeZone: "America/Los_Angeles", countryCode: "US" });
+
+    engine.join("a", 1, "🦊", "Asia/Jerusalem", "IL");
+    expect(engine.players[0]).toMatchObject({ timeZone: "Asia/Jerusalem", countryCode: "IL" });
+    expect(engine.join("a", 2, "🦊", "invalid-zone", "XXX").changed).toBe(true);
+    expect(engine.players[0]).toMatchObject({ timeZone: null, countryCode: null });
+  });
+
   it("starts the first player at one with seven seconds", () => {
     const engine = game();
     engine.join("a", 100);

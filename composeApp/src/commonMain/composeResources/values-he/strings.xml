@@ -60,6 +60,7 @@
     <string name="continue_solo">המשך</string>
     <string name="waiting">ממתינים</string>
     <string name="your_turn">התור שלך</string>
+    <string name="answer_with_number">תשובה במספר</string>
     <string name="connected_players">%1$d שחקנים מחוברים</string>
     <string name="roster_active_turn">טבעת כחולה: התור הפעיל</string>
     <string name="roster_loading">טוענים שחקנים…</string>

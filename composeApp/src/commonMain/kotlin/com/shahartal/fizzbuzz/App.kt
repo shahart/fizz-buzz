@@ -47,16 +47,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import fizz_buzz.composeapp.generated.resources.Res
 import fizz_buzz.composeapp.generated.resources.average_response_time
+import fizz_buzz.composeapp.generated.resources.answer_with_number
 import fizz_buzz.composeapp.generated.resources.boom
 import fizz_buzz.composeapp.generated.resources.choose_emoji
 import fizz_buzz.composeapp.generated.resources.choose_nickname
@@ -109,6 +114,7 @@ private val Navy = Color(0xFF102A43)
 private val Sky = Color(0xFFEAF4FF)
 private val Blue = Color(0xFF1473E6)
 private val Red = Color(0xFFD92D20)
+private val AnswerGreen = Color(0xFF16803D)
 private data class GamePalette(val navy: Color, val sky: Color, val blue: Color, val red: Color)
 private val Palettes = mapOf(
     "classic" to GamePalette(Navy, Sky, Blue, Red),
@@ -183,18 +189,34 @@ private fun MultiplayerGame(compact: Boolean) {
     val failureFlashAlpha = remember { Animatable(1f) }
     val contentScrollState = rememberScrollState()
     val activeTurn = uiState.isActiveTurn(session.sessionId)
-    val numberAction = remember(session, snapshot?.turnId, snapshot?.number) {
+    val numberAction = remember(session, snapshot?.turnId, snapshot?.number, uiState.connectionStatus) {
         {
             lastHeard = null
             snapshot?.let { current -> current.turnId?.let { session.submitNumber(it, current.number) } }
             Unit
         }
     }
-    val boomAction = remember(session, snapshot?.turnId) {
+    val boomAction = remember(session, snapshot?.turnId, uiState.connectionStatus) {
         {
             lastHeard = null
             snapshot?.turnId?.let(session::submitBoom)
             Unit
+        }
+    }
+
+    LaunchedEffect(snapshot?.connectedPlayers) {
+        snapshot?.let { logGameEvent("players_count", "count=${it.connectedPlayers}") }
+    }
+    LaunchedEffect(uiState.connectionStatus) {
+        when (uiState.connectionStatus) {
+            ConnectionStatus.CONNECTED -> logGameEvent("game_connected", "mode=online")
+            ConnectionStatus.SOLO -> logGameEvent("game_connected", "mode=solo")
+            else -> Unit
+        }
+    }
+    LaunchedEffect(snapshot?.revision, snapshot?.phase) {
+        snapshot?.takeIf { it.phase == GamePhase.GAME_OVER && it.gameOverReason != GameOverReason.NO_PLAYERS }?.let {
+            logGameEvent("game_over", "reason=${it.gameOverReason} number=${it.number} players=${it.connectedPlayers}")
         }
     }
     val isRtlLayout = LocalLayoutDirection.current == LayoutDirection.Rtl
@@ -314,7 +336,7 @@ private fun MultiplayerGame(compact: Boolean) {
                             nickname = nickname,
                             compact = compact,
                             onChooseNickname = { showNicknamePicker = true },
-                            onJoin = { prepareTimeoutSound(); lastHeard = null; session.join() },
+                            onJoin = { logGameEvent("join_started"); prepareTimeoutSound(); lastHeard = null; session.join() },
                             bestNumber = uiState.bestNumber,
                             lowestResponseTime = uiState.lowestResponseTimeText(),
                             selectedTheme = selectedTheme,
@@ -327,7 +349,7 @@ private fun MultiplayerGame(compact: Boolean) {
                             snapshot = snapshot,
                             sessionId = session.sessionId,
                             activeTurn = activeTurn,
-                            seconds = uiState.secondsRemaining(now),
+                            turnProgress = uiState.turnProgress(now),
                             averageResponseTime = uiState.averageResponseTimeText(session.sessionId),
                             latencyMillis = uiState.latencyMillis,
                             bestNumber = uiState.bestNumber,
@@ -335,7 +357,7 @@ private fun MultiplayerGame(compact: Boolean) {
                             lastHeard = lastHeard,
                             onBoom = boomAction,
                             onNumber = numberAction,
-                            onRestart = session::restart,
+                            onRestart = { logGameEvent("restart_requested"); session.restart() },
                             onShowRoster = { showRoster = true },
                             compact = compact,
                         )
@@ -537,7 +559,7 @@ private fun PlayerRosterDialog(snapshot: GameSnapshot, roster: GameRoster?, onDi
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     LazyVerticalGrid(
-                        columns = GridCells.Adaptive(56.dp),
+                        columns = GridCells.Adaptive(72.dp),
                         modifier = Modifier.fillMaxWidth().heightIn(max = 336.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -545,14 +567,26 @@ private fun PlayerRosterDialog(snapshot: GameSnapshot, roster: GameRoster?, onDi
                         items(roster.players, key = { it.sessionId }) { player ->
                             val isActive = snapshot.phase == GamePhase.ACTIVE &&
                                 player.sessionId == snapshot.activeSessionId
+                            val location = playerLocationLabel(player.countryCode, player.timeZone)
                             Box(
                                 modifier = Modifier
-                                    .size(56.dp)
+                                    .size(width = 72.dp, height = 76.dp)
                                     .then(if (isActive) Modifier.border(3.dp, palette.blue, CircleShape) else Modifier)
-                                    .padding(6.dp),
+                                    .padding(4.dp),
                                 contentAlignment = Alignment.Center,
                             ) {
-                                EmojiNicknameSymbol(player.nickname, fontSize = 30.sp)
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    EmojiNicknameSymbol(player.nickname, fontSize = 28.sp)
+                                    if (location != null) {
+                                        Text(
+                                            text = location,
+                                            color = palette.navy.copy(alpha = .65f),
+                                            fontSize = 8.sp,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -576,12 +610,26 @@ private fun PlayerRosterDialog(snapshot: GameSnapshot, roster: GameRoster?, onDi
     )
 }
 
+private fun playerLocationLabel(countryCode: String?, timeZone: String?): String? {
+    val flag = countryCode?.takeIf { it.length == 2 && it.all { letter -> letter in 'A'..'Z' } }?.let { code ->
+        buildString {
+            code.forEach { letter ->
+                val shifted = (0x1F1E6 + letter.code - 'A'.code) - 0x10000
+                append((0xD800 + (shifted shr 10)).toChar())
+                append((0xDC00 + (shifted and 0x3FF)).toChar())
+            }
+        }
+    }
+    val city = timeZone?.substringAfterLast('/')?.replace('_', ' ')
+    return listOfNotNull(flag, city).takeIf { it.isNotEmpty() }?.joinToString(" ")
+}
+
 @Composable
 private fun GamePanel(
     snapshot: GameSnapshot,
     sessionId: String,
     activeTurn: Boolean,
-    seconds: Int,
+    turnProgress: Float,
     averageResponseTime: String,
     latencyMillis: Long?,
     bestNumber: Int,
@@ -597,16 +645,25 @@ private fun GamePanel(
     val failed = snapshot.phase == GamePhase.GAME_OVER
     if (failed) {
         Row(
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            BombSymbol(Modifier.size(if (compact) 32.dp else 48.dp), fontSize = if (compact) 32.sp else 48.sp)
-            Text(
-                text = stringResource(Res.string.boom).replace("💣", "").trim(),
-                color = Color.White,
-                fontSize = if (compact) 32.sp else 56.sp,
-                fontWeight = FontWeight.Black,
-            )
+            Row(
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BombSymbol(Modifier.size(if (compact) 32.dp else 48.dp), fontSize = if (compact) 32.sp else 48.sp)
+                Text(
+                    text = stringResource(Res.string.boom).replace("💣", "").trim(),
+                    color = Color.White,
+                    fontSize = if (compact) 32.sp else 56.sp,
+                    fontWeight = FontWeight.Black,
+                )
+            }
+            TextButton(onClick = onShowRoster, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                Text("👥 ${snapshot.connectedPlayers}", color = Color.White)
+            }
         }
         val winners = snapshot.winningNicknames()
         if (winners.isNotEmpty()) {
@@ -628,28 +685,46 @@ private fun GamePanel(
             }
         }
     } else {
-        Text(
-            text = stringResource(if (activeTurn) Res.string.your_turn else Res.string.waiting),
-            color = palette.navy,
-            fontSize = if (compact) 18.sp else 24.sp,
-            fontWeight = FontWeight.Black,
-        )
-    }
-    Spacer(Modifier.height(if (compact) 2.dp else 14.dp))
-    if (!compact) {
-        TextButton(onClick = onShowRoster, contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(
-                stringResource(Res.string.connected_players, snapshot.connectedPlayers),
-                color = if (failed) Color.White else palette.navy.copy(alpha = .65f),
+                text = stringResource(if (activeTurn) Res.string.your_turn else Res.string.waiting),
+                color = palette.navy,
+                fontSize = if (compact) 18.sp else 24.sp,
+                fontWeight = FontWeight.Black,
             )
+            TextButton(onClick = onShowRoster, contentPadding = PaddingValues(horizontal = 6.dp, vertical = 0.dp)) {
+                Text("👥 ${snapshot.connectedPlayers}", color = palette.navy.copy(alpha = .65f))
+            }
         }
     }
+    Spacer(Modifier.height(if (compact) 2.dp else 14.dp))
     Spacer(Modifier.height(if (compact) 4.dp else 18.dp))
     Box(Modifier.size(if (compact) 72.dp else 190.dp).background(Color.White, CircleShape), contentAlignment = Alignment.Center) {
         Text(snapshot.number.toString(), color = palette.navy, fontSize = if (compact) 36.sp else 72.sp, fontWeight = FontWeight.Black)
     }
-    Spacer(Modifier.height(if (compact) 4.dp else 24.dp))
-    Text(seconds.toString(), color = if (failed) Color.White else palette.blue, fontSize = if (compact) 26.sp else 48.sp, fontWeight = FontWeight.Bold)
+    if (!failed) {
+        Spacer(Modifier.height(if (compact) 10.dp else 24.dp))
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(12.dp)
+                .clip(CircleShape)
+                .background(palette.blue.copy(alpha = .16f)),
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Box(
+                Modifier
+                    .fillMaxWidth(turnProgress)
+                    .height(12.dp)
+                    .clip(CircleShape)
+                    .background(palette.blue),
+            )
+        }
+    }
     val statusMessage = when {
             snapshot.gameOverReason == GameOverReason.TIMEOUT && snapshot.failedByAnotherPlayer(sessionId) ->
                 stringResource(Res.string.someone_else_timed_out)
@@ -681,7 +756,6 @@ private fun GamePanel(
         Spacer(Modifier.height(if (compact) 4.dp else 20.dp))
         AnswerButtons(
             enabled = activeTurn,
-            number = snapshot.number,
             onBoom = onBoom,
             onNumber = onNumber,
             compact = compact,
@@ -756,8 +830,9 @@ private fun GamePanel(
 }
 
 @Composable
-private fun AnswerButtons(enabled: Boolean, number: Int, onBoom: () -> Unit, onNumber: () -> Unit, compact: Boolean, modifier: Modifier = Modifier) {
+private fun AnswerButtons(enabled: Boolean, onBoom: () -> Unit, onNumber: () -> Unit, compact: Boolean, modifier: Modifier = Modifier) {
     val palette = LocalPalette.current
+    val numberAnswerDescription = stringResource(Res.string.answer_with_number)
     Row(
         modifier.fillMaxWidth().padding(horizontal = if (compact) 4.dp else 24.dp, vertical = if (compact) 4.dp else 20.dp),
         horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 16.dp),
@@ -767,8 +842,9 @@ private fun AnswerButtons(enabled: Boolean, number: Int, onBoom: () -> Unit, onN
             shape = RoundedCornerShape(if (compact) 26.dp else 18.dp), colors = ButtonDefaults.buttonColors(containerColor = palette.red),
         ) { BombSymbol(Modifier.size(if (compact) 28.dp else 36.dp), fontSize = if (compact) 24.sp else 30.sp) }
         Button(
-            onClick = onNumber, enabled = enabled, modifier = Modifier.weight(1f).height(if (compact) 44.dp else 64.dp),
-            shape = RoundedCornerShape(if (compact) 26.dp else 18.dp), colors = ButtonDefaults.buttonColors(containerColor = palette.blue),
-        ) { Text(number.toString(), fontSize = if (compact) 22.sp else 28.sp, fontWeight = FontWeight.Black) }
+            onClick = onNumber, enabled = enabled, modifier = Modifier.weight(1f).height(if (compact) 44.dp else 64.dp)
+                .semantics { contentDescription = numberAnswerDescription },
+            shape = RoundedCornerShape(if (compact) 26.dp else 18.dp), colors = ButtonDefaults.buttonColors(containerColor = AnswerGreen, contentColor = Color.White),
+        ) { }
     }
 }

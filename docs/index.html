@@ -1,42 +1,51 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="theme-color" content="#EAF4FF">
-    <link rel="icon" type="image/svg+xml" href="icon.svg">
-    <title>fizz-buzz 7-boom 1.04</title>
-    <script>
-        let isHebrew = (navigator.language || "").toLowerCase().startsWith("he");
-        document.documentElement.lang = isHebrew ? "he" : "en";
-        document.documentElement.dir = isHebrew ? "rtl" : "ltr";
-        if (isHebrew) {
-            document.title = "1.04 פיז-באז 7-בום";
-        }
-    </script>
-    <style>
-        html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
-        body { background: #EAF4FF; }
-    </style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#eaf4ff">
+  <meta name="description" content="A quick global 7-Boom number game. Say or tap the number, or hit BOOM for sevens.">
+  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <link rel="stylesheet" href="./styles.css">
+  <title>7-Boom 1.1</title>
 </head>
 <body>
-    <script src="firebase-config.js"></script>
-    <script type="module">
-        const firebaseConfig = globalThis.firebaseConfig;
-        if (firebaseConfig?.apiKey && firebaseConfig?.appId && firebaseConfig?.measurementId) {
-            const [{ initializeApp }, { getAnalytics, isSupported }] = await Promise.all([
-                import("https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js"),
-                import("https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js"),
-            ]);
-            if (await isSupported()) {
-                getAnalytics(initializeApp(firebaseConfig));
-            }
-        }
-    </script>
-    <script>
-        const appScript = document.createElement("script");
-        appScript.src = `composeApp.js?v=${Date.now()}`;
-        document.body.appendChild(appScript);
-    </script>
+  <main id="app" class="app-shell" aria-live="polite"></main>
+
+  <dialog id="nickname-dialog" class="dialog" aria-labelledby="nickname-title">
+    <div class="dialog-head">
+      <div><p class="eyebrow" data-copy="nicknameEyebrow"></p><h2 id="nickname-title" data-copy="chooseEmoji"></h2></div>
+      <button class="icon-button" type="button" data-action="close-nickname" data-label="close" aria-label="Close">×</button>
+    </div>
+    <div id="emoji-grid" class="emoji-grid"></div>
+  </dialog>
+
+  <dialog id="theme-dialog" class="dialog" aria-labelledby="theme-title">
+    <div class="dialog-head">
+      <div><p class="eyebrow" data-copy="preferences"></p><h2 id="theme-title" data-copy="themes"></h2></div>
+      <button class="icon-button" type="button" data-action="close-theme" data-label="close" aria-label="Close">×</button>
+    </div>
+    <div id="theme-options" class="theme-options"></div>
+  </dialog>
+
+  <dialog id="roster-dialog" class="dialog" aria-labelledby="roster-title">
+    <div class="dialog-head">
+      <div><p class="eyebrow" data-copy="liveGame"></p><h2 id="roster-title"></h2></div>
+      <button class="icon-button" type="button" data-action="close-roster" data-label="close" aria-label="Close">×</button>
+    </div>
+    <div id="roster-list" class="roster-list"></div>
+    <p id="roster-active-hint" class="dialog-note" hidden></p>
+  </dialog>
+
+  <dialog id="offline-dialog" class="dialog offline-dialog" aria-labelledby="offline-title">
+    <div class="offline-icon" aria-hidden="true">⌁</div>
+    <p class="eyebrow" data-copy="connection"></p>
+    <h2 id="offline-title" data-copy="soloTitle"></h2>
+    <p class="dialog-note" data-copy="soloMessage"></p>
+    <button class="primary-button" type="button" data-action="continue-solo" data-copy="continue"></button>
+  </dialog>
+
+  <script src="./firebase-config.js"></script>
+  <script type="module" src="./app.js"></script>
 </body>
 </html>

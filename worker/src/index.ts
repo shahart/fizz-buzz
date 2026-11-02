@@ -44,7 +44,7 @@ interface Snapshot {
 interface RosterMessage {
   type: "roster";
   revision: number;
-  players: Array<{ sessionId: string; nickname: string }>;
+  players: Array<{ sessionId: string; nickname: string; timeZone?: string; countryCode?: string }>;
 }
 
 export class GlobalGame extends DurableObject<Env> {
@@ -68,6 +68,8 @@ export class GlobalGame extends DurableObject<Env> {
         CREATE TABLE IF NOT EXISTS roster (
           session_id TEXT PRIMARY KEY,
           nickname TEXT NOT NULL DEFAULT '😀',
+          time_zone TEXT,
+          country_code TEXT,
           join_order INTEGER NOT NULL UNIQUE,
           response_time_total_millis INTEGER NOT NULL DEFAULT 0,
           response_count INTEGER NOT NULL DEFAULT 0
@@ -87,6 +89,12 @@ export class GlobalGame extends DurableObject<Env> {
       if (!rosterColumns.some((column) => column.name === "nickname")) {
         this.ctx.storage.sql.exec("ALTER TABLE roster ADD COLUMN nickname TEXT NOT NULL DEFAULT '😀'");
       }
+      if (!rosterColumns.some((column) => column.name === "time_zone")) {
+        this.ctx.storage.sql.exec("ALTER TABLE roster ADD COLUMN time_zone TEXT");
+      }
+      if (!rosterColumns.some((column) => column.name === "country_code")) {
+        this.ctx.storage.sql.exec("ALTER TABLE roster ADD COLUMN country_code TEXT");
+      }
       const existing = this.ctx.storage.sql.exec("SELECT singleton FROM game_state WHERE singleton = 1").toArray();
       if (existing.length === 0) this.persist(initialState(), []);
     });
@@ -96,6 +104,8 @@ export class GlobalGame extends DurableObject<Env> {
     const url = new URL(request.url);
     const sessionId = url.searchParams.get("sessionId");
     const nickname = parseNickname(url.searchParams.get("nickname"));
+    const timeZone = parseTimeZone(url.searchParams.get("timeZone"));
+    const countryCode = parseCountryCode(url.searchParams.get("countryCode"));
     if (request.headers.get("Upgrade")?.toLowerCase() !== "websocket") {
       return new Response("Expected a WebSocket upgrade", { status: 426 });
     }
@@ -133,7 +143,7 @@ export class GlobalGame extends DurableObject<Env> {
         changed = engine.leave(player.sessionId, now).changed || changed;
       }
     }
-    const mutation = engine.join(sessionId, now, nickname);
+    const mutation = engine.join(sessionId, now, nickname, timeZone, countryCode);
     changed = mutation.changed || changed;
     if (changed) {
       this.persist(engine.state, engine.players);
@@ -226,12 +236,15 @@ export class GlobalGame extends DurableObject<Env> {
       lastJoinOrder: row.last_join_order,
     };
     const players = this.ctx.storage.sql.exec<{
-      session_id: string; nickname: string; join_order: number; response_time_total_millis: number; response_count: number;
+      session_id: string; nickname: string; time_zone: string | null; country_code: string | null;
+      join_order: number; response_time_total_millis: number; response_count: number;
     }>(
-      "SELECT session_id, nickname, join_order, response_time_total_millis, response_count FROM roster ORDER BY join_order",
+      "SELECT session_id, nickname, time_zone, country_code, join_order, response_time_total_millis, response_count FROM roster ORDER BY join_order",
     ).toArray().map((player): Player => ({
       sessionId: player.session_id,
       nickname: isEmojiNickname(player.nickname) ? player.nickname : DEFAULT_EMOJI_NICKNAME,
+      timeZone: player.time_zone,
+      countryCode: player.country_code,
       joinOrder: player.join_order,
       responseTimeTotalMillis: player.response_time_total_millis,
       responseCount: player.response_count,
@@ -256,8 +269,8 @@ export class GlobalGame extends DurableObject<Env> {
       sql.exec("DELETE FROM roster");
       for (const player of players) {
         sql.exec(
-          "INSERT INTO roster(session_id, nickname, join_order, response_time_total_millis, response_count) VALUES(?, ?, ?, ?, ?)",
-          player.sessionId, player.nickname, player.joinOrder, player.responseTimeTotalMillis, player.responseCount,
+          "INSERT INTO roster(session_id, nickname, time_zone, country_code, join_order, response_time_total_millis, response_count) VALUES(?, ?, ?, ?, ?, ?, ?)",
+          player.sessionId, player.nickname, player.timeZone, player.countryCode, player.joinOrder, player.responseTimeTotalMillis, player.responseCount,
         );
       }
     });
@@ -313,7 +326,12 @@ export class GlobalGame extends DurableObject<Env> {
     return {
       type: "roster",
       revision: engine.state.revision,
-      players: engine.players.map(({ sessionId, nickname }) => ({ sessionId, nickname })),
+      players: engine.players.map(({ sessionId, nickname, timeZone, countryCode }) => ({
+        sessionId,
+        nickname,
+        ...(timeZone ? { timeZone } : {}),
+        ...(countryCode ? { countryCode } : {}),
+      })),
     };
   }
 
@@ -354,6 +372,21 @@ function isSessionId(value: string): boolean {
 function parseNickname(value: string | null): string | null {
   if (value === null) return DEFAULT_EMOJI_NICKNAME;
   return isEmojiNickname(value) ? value : null;
+}
+
+function parseTimeZone(value: string | null): string | null {
+  if (value === null || value.length > 64) return null;
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: value }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
+function parseCountryCode(value: string | null): string | null {
+  if (value === null) return null;
+  const code = value.toUpperCase();
+  return /^[A-Z]{2}$/.test(code) && code !== "XX" ? code : null;
 }
 
 function parseClientMessage(raw: string): ClientMessage | null {
@@ -405,7 +438,11 @@ export default {
       if (parseNickname(url.searchParams.get("nickname")) === null) {
         return new Response("A valid emoji nickname is required", { status: 400 });
       }
-      return env.GLOBAL_GAME.getByName("global").fetch(request);
+      url.searchParams.delete("countryCode");
+      const edgeCountryValue = request.cf?.country;
+      const edgeCountry = typeof edgeCountryValue === "string" ? parseCountryCode(edgeCountryValue) : null;
+      if (edgeCountry !== null) url.searchParams.set("countryCode", edgeCountry);
+      return env.GLOBAL_GAME.getByName("global").fetch(new Request(url, request));
     }
     return env.ASSETS.fetch(request);
   },

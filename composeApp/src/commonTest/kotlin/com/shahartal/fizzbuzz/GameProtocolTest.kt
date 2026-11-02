@@ -32,12 +32,14 @@ class GameProtocolTest {
     @Test
     fun decodesRosterAndPreservesDuplicatePlayersInOrder() {
         val roster = Json.decodeFromString<GameRoster>(
-            """{"type":"roster","revision":4,"players":[{"sessionId":"a","nickname":"🚀"},{"sessionId":"b","nickname":"🚀"}]}""",
+            """{"type":"roster","revision":4,"players":[{"sessionId":"a","nickname":"🚀","timeZone":"America/Los_Angeles","countryCode":"US"},{"sessionId":"b","nickname":"🚀"}]}""",
         )
         val reduced = GameUiState(snapshot = active).reduce(roster)
 
         assertEquals(listOf("a", "b"), reduced.roster?.players?.map { it.sessionId })
         assertEquals(listOf("🚀", "🚀"), reduced.roster?.players?.map { it.nickname })
+        assertEquals("America/Los_Angeles", reduced.roster?.players?.first()?.timeZone)
+        assertEquals("US", reduced.roster?.players?.first()?.countryCode)
     }
 
     @Test
@@ -107,6 +109,14 @@ class GameProtocolTest {
         assertEquals(7, reduced.secondsRemaining(10_000))
         assertEquals(1, reduced.secondsRemaining(16_000))
         assertEquals(reduced, reduced.reduce(active.copy(revision = 3, number = 99), 12_000))
+    }
+
+    @Test
+    fun turnProgressShrinksSmoothlyAcrossTheSevenSecondDeadline() {
+        val reduced = GameUiState().reduce(active, receivedAtMillis = 9_500)
+        assertEquals(1f, reduced.turnProgress(9_500))
+        assertEquals(0.5f, reduced.turnProgress(13_000))
+        assertEquals(0f, reduced.turnProgress(17_000))
     }
 
     @Test
@@ -220,6 +230,10 @@ class GameProtocolTest {
         assertNull(recognitionSubmission(state, "b", "turn-4", listOf("boom")))
         assertEquals(RecognitionSubmission.Boom, recognitionSubmission(state, "a", "turn-4", listOf("boom")))
         assertEquals(RecognitionSubmission.Invalid, recognitionSubmission(state, "a", "turn-4", listOf("seventeen")))
+        assertEquals(
+            RecognitionSubmission.Number(1),
+            recognitionSubmission(state.copy(snapshot = active.copy(number = 1)), "a", "turn-4", listOf("one")),
+        )
         assertIs<RecognitionSubmission.Number>(
             recognitionSubmission(state.copy(snapshot = active.copy(number = 18)), "a", "turn-4", listOf("18")),
         )

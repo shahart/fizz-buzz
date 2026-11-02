@@ -88,9 +88,21 @@ class GameSession(
         if (mutableState.value.connectionStatus == ConnectionStatus.SOLO_PENDING) startSoloGame()
     }
 
-    fun submitBoom(turnId: String) = sendAnswer(turnId, "boom")
+    fun submitBoom(turnId: String) {
+        val current = mutableState.value.snapshot
+        logGameEvent(
+            "answer_submitted",
+            "kind=boom number=${current?.number} correct=${current?.number?.isBoomNumber()} mode=${mutableState.value.connectionStatus.name.lowercase()}",
+        )
+        sendAnswer(turnId, "boom")
+    }
 
     fun submitNumber(turnId: String, number: Int) {
+        val currentNumber = mutableState.value.snapshot?.number
+        logGameEvent(
+            "answer_submitted",
+            "kind=number number=$number expected=$currentNumber correct=${currentNumber != null && currentNumber == number && !currentNumber.isBoomNumber()} mode=${mutableState.value.connectionStatus.name.lowercase()}",
+        )
         if (mutableState.value.connectionStatus == ConnectionStatus.SOLO) {
             val current = mutableState.value.snapshot ?: return
             submitSoloAnswer(turnId, !current.number.isBoomNumber() && number == current.number)
@@ -107,7 +119,15 @@ class GameSession(
     }
 
     fun submitRecognition(turnId: String, alternatives: List<String>): Boolean {
-        when (val submission = recognitionSubmission(mutableState.value, sessionId, turnId, alternatives)) {
+        val submission = recognitionSubmission(mutableState.value, sessionId, turnId, alternatives)
+        val mappedAnswer = when (submission) {
+            null -> "stale_or_inactive"
+            RecognitionSubmission.Boom -> "boom"
+            is RecognitionSubmission.Number -> "number:${submission.value}"
+            RecognitionSubmission.Invalid -> "invalid"
+        }
+        logGameEvent("speech_answer", "expected=${mutableState.value.snapshot?.number} mapped=$mappedAnswer")
+        when (submission) {
             null -> return false
             RecognitionSubmission.Boom -> submitBoom(turnId)
             is RecognitionSubmission.Number -> submitNumber(turnId, submission.value)
@@ -189,6 +209,9 @@ class GameSession(
     }
 
     private fun sendAnswer(turnId: String, answerType: String) {
+        if (answerType == "invalid") {
+            logGameEvent("answer_submitted", "kind=invalid number=${mutableState.value.snapshot?.number} mode=${mutableState.value.connectionStatus.name.lowercase()}")
+        }
         if (mutableState.value.connectionStatus == ConnectionStatus.SOLO) {
             val current = mutableState.value.snapshot ?: return
             submitSoloAnswer(turnId, answerType == "boom" && current.number.isBoomNumber())

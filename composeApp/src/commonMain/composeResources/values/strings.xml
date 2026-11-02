@@ -25,6 +25,7 @@
     <string name="continue_solo">Continue</string>
     <string name="waiting">Waiting</string>
     <string name="your_turn">Your turn</string>
+    <string name="answer_with_number">Answer with the number</string>
     <string name="connected_players">%1$d players connected</string>
     <string name="roster_active_turn">Blue ring: active turn</string>
     <string name="roster_loading">Loading players…</string>

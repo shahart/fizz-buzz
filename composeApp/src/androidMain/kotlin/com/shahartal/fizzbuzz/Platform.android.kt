@@ -1,6 +1,7 @@
 package com.shahartal.fizzbuzz
 
 import android.net.Uri
+import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -12,6 +13,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.WebSockets
 import java.util.UUID
+import java.util.TimeZone
 
 actual fun createGameHttpClient(): HttpClient = HttpClient(OkHttp) { install(WebSockets) }
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
@@ -20,8 +22,12 @@ actual fun gameWebSocketUrl(sessionId: String, nickname: String): String =
     Uri.parse(BuildConfig.GAME_WORKER_URL).buildUpon()
         .appendQueryParameter("sessionId", sessionId)
         .appendQueryParameter("nickname", nickname)
+        .appendQueryParameter("timeZone", TimeZone.getDefault().id)
         .build()
         .toString()
+actual fun logGameEvent(event: String, details: String) {
+    Log.i("SevenBoom", "$event $details")
+}
 
 actual val supportsWebKeyboardControls: Boolean = false
 

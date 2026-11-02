@@ -3,12 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build:web": "../gradlew -p .. :composeApp:wasmJsBrowserDistribution",
-    "check": "tsc --noEmit && vitest run",
-    "test": "vitest run",
+    "check": "tsc --noEmit && npm test",
+    "test": "vitest run && npm run test:web",
+    "test:worker": "vitest run",
+    "test:web": "node --test ../docs/tests/web-client.test.mjs",
     "types": "wrangler types worker-configuration.d.ts",
-    "dev": "npm run build:web && wrangler dev",
-    "deploy": "npm run build:web && wrangler deploy --minify"
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy --minify"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.20.3",

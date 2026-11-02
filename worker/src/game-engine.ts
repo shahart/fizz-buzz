@@ -17,6 +17,8 @@ export type GameOverReason = "wrongAnswer" | "timeout" | "noPlayers";
 export interface Player {
   sessionId: string;
   nickname: string;
+  timeZone: string | null;
+  countryCode: string | null;
   joinOrder: number;
   responseTimeTotalMillis: number;
   responseCount: number;
@@ -78,12 +80,24 @@ export class GameEngine {
     private readonly newTurnId: () => string = () => crypto.randomUUID(),
   ) {}
 
-  join(sessionId: string, now: number, nickname = DEFAULT_EMOJI_NICKNAME): Mutation {
+  join(
+    sessionId: string,
+    now: number,
+    nickname = DEFAULT_EMOJI_NICKNAME,
+    timeZone: string | null = null,
+    countryCode: string | null = null,
+  ): Mutation {
     nickname = isEmojiNickname(nickname) ? nickname : DEFAULT_EMOJI_NICKNAME;
+    timeZone = normalizeTimeZone(timeZone);
+    countryCode = normalizeCountryCode(countryCode);
     const existing = this.players.find((player) => player.sessionId === sessionId);
     if (existing !== undefined) {
-      if (existing.nickname === nickname) return { changed: false, alarm: this.state.deadline };
+      if (existing.nickname === nickname && existing.timeZone === timeZone && existing.countryCode === countryCode) {
+        return { changed: false, alarm: this.state.deadline };
+      }
       existing.nickname = nickname;
+      existing.timeZone = timeZone;
+      existing.countryCode = countryCode;
       this.state.revision += 1;
       return { changed: true, alarm: this.state.deadline };
     }
@@ -92,6 +106,8 @@ export class GameEngine {
     this.players.push({
       sessionId,
       nickname,
+      timeZone,
+      countryCode,
       joinOrder: this.state.lastJoinOrder,
       responseTimeTotalMillis: 0,
       responseCount: 0,
@@ -267,4 +283,19 @@ export class GameEngine {
     player.responseTimeTotalMillis += Math.round(Math.max(0, Math.min(TURN_MILLIS, responseTimeMillis)));
     player.responseCount += 1;
   }
+}
+
+function normalizeTimeZone(value: string | null): string | null {
+  if (value === null || value.length > 64) return null;
+  try {
+    return new Intl.DateTimeFormat("en-US", { timeZone: value }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
+function normalizeCountryCode(value: string | null): string | null {
+  if (value === null) return null;
+  const code = value.toUpperCase();
+  return /^[A-Z]{2}$/.test(code) && code !== "XX" ? code : null;
 }

@@ -69,8 +69,8 @@ extensions.configure<ApplicationExtension> {
         applicationId = "com.shahartal.fizzbuzz"
         minSdk = 24
         targetSdk = 36
-        versionCode = 6
-        versionName = "1.04"
+        versionCode = 7
+        versionName = "1.1"
         val workerUrl = providers.gradleProperty("gameWorkerUrl")
             .orElse("wss://global-seven-boom.lat-shahar.workers.dev/game")
             .get()

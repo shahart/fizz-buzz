@@ -7,6 +7,7 @@ expect fun createGameHttpClient(): HttpClient
 expect fun currentTimeMillis(): Long
 expect fun anonymousSessionId(): String
 expect fun gameWebSocketUrl(sessionId: String, nickname: String): String
+expect fun logGameEvent(event: String, details: String = "")
 
 interface BestNumberStore {
     fun load(): Int

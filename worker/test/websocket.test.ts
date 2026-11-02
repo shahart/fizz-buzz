@@ -4,9 +4,9 @@ import { describe, expect, it } from "vitest";
 const A = "00000000-0000-4000-8000-000000000001";
 const B = "00000000-0000-4000-8000-000000000002";
 
-async function connect(sessionId: string, nickname = "😀"): Promise<WebSocket> {
+async function connect(sessionId: string, nickname = "😀", timeZone = ""): Promise<WebSocket> {
   const response = await exports.default.fetch(
-    `https://example.test/game?sessionId=${sessionId}&nickname=${encodeURIComponent(nickname)}`,
+    `https://example.test/game?sessionId=${sessionId}&nickname=${encodeURIComponent(nickname)}&timeZone=${encodeURIComponent(timeZone)}`,
     {
       headers: { Upgrade: "websocket" },
     },
@@ -33,6 +33,15 @@ async function nextUpdate(socket: WebSocket): Promise<{
 }
 
 describe("WebSocket integration", () => {
+  it("includes the player's reported timezone in the roster", async () => {
+    const socket = await connect(A, "🦊", "America/Los_Angeles");
+    const update = await nextUpdate(socket);
+    expect(update.roster.players).toEqual([
+      expect.objectContaining({ sessionId: A, nickname: "🦊", timeZone: "America/Los_Angeles" }),
+    ]);
+    socket.close();
+  });
+
   it("broadcasts identical authoritative turns and active-player exclusivity", async () => {
     const a = await connect(A, "🦊");
     const first = await nextUpdate(a);

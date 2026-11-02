@@ -55,6 +55,8 @@ data class ResponseRanking(
 data class RosterPlayer(
     val sessionId: String,
     val nickname: String,
+    val timeZone: String? = null,
+    val countryCode: String? = null,
 )
 
 @Serializable
@@ -105,6 +107,12 @@ data class GameUiState(
         val end = snapshot?.deadline ?: return 0
         val remaining = end - (localNowMillis + serverClockOffsetMillis)
         return ((remaining.coerceAtLeast(0) + 999) / 1_000).toInt().coerceAtMost(STARTING_SECONDS)
+    }
+
+    fun turnProgress(localNowMillis: Long): Float {
+        val end = snapshot?.deadline ?: return 0f
+        val remaining = end - (localNowMillis + serverClockOffsetMillis)
+        return (remaining.toFloat() / (STARTING_SECONDS * 1_000L)).coerceIn(0f, 1f)
     }
 
     fun recordResponse(sessionId: String, turnId: String, localNowMillis: Long): GameUiState {
