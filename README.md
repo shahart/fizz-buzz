@@ -1,3 +1,5 @@
+[![Verify and deploy](https://github.com/shahart/fizz-buzz/actions/workflows/static.yml/badge.svg)](https://github.com/shahart/fizz-buzz/actions/workflows/static.yml)
+
 # fizz-buzz 7-boom
 
 A global number game with a lightweight HTML/CSS/TypeScript web client and a Compose Multiplatform Android app. One Cloudflare Durable Object owns the shared counter, player rotation, and seven-second deadline. Say or tap the displayed number, or say `BOOM`/tap 💣 when it is divisible by 7 or contains the digit 7.

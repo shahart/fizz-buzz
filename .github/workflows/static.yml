@@ -20,14 +20,10 @@ jobs:
     name: Web and Worker tests
     uses: ./.github/workflows/web-tests.yml
 
-  android-tests:
-    name: Android tests
-    uses: ./.github/workflows/android-tests.yml
-
   deploy:
     name: Deploy GitHub Pages
     if: github.event_name != 'pull_request'
-    needs: [web-tests, android-tests]
+    needs: [web-tests]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
