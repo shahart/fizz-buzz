@@ -7,7 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
+import android.content.Context
+import android.content.ContextWrapper
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -35,20 +36,24 @@ actual val supportsWebKeyboardControls: Boolean = true
 
 @Composable
 actual fun ObserveWebKeyboardControls(enabled: Boolean, onLeft: () -> Unit, onRight: () -> Unit) {
-    val view = LocalView.current
-    DisposableEffect(view, enabled, onLeft, onRight) {
-        view.isFocusableInTouchMode = true
-        view.setOnKeyListener { _, keyCode, event ->
-            if (!enabled || event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return@setOnKeyListener false
-            when (keyCode) {
+    val activity = LocalContext.current.findMainActivity()
+    DisposableEffect(activity, enabled, onLeft, onRight) {
+        val handler: (Int) -> Boolean = { keyCode ->
+            if (!enabled) false else when (keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> { onLeft(); true }
                 KeyEvent.KEYCODE_DPAD_RIGHT -> { onRight(); true }
                 else -> false
             }
         }
-        view.requestFocus()
-        onDispose { view.setOnKeyListener(null) }
+        activity?.arrowKeyHandler = handler
+        onDispose { if (activity?.arrowKeyHandler === handler) activity.arrowKeyHandler = null }
     }
+}
+
+private tailrec fun Context.findMainActivity(): MainActivity? = when (this) {
+    is MainActivity -> this
+    is ContextWrapper -> baseContext.findMainActivity()
+    else -> null
 }
 
 @Composable

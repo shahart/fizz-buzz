@@ -11,8 +11,8 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import androidx.test.platform.app.InstrumentationRegistry
 import android.view.KeyEvent
+import android.view.View
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,6 +20,7 @@ import org.junit.AfterClass
 import org.junit.After
 import org.junit.Before
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
 import org.junit.Rule
 import org.junit.Test
@@ -61,6 +62,7 @@ class MainActivityTest {
         }
         composeRule.onNodeWithTag("nickname-choice-${beforePicker.nickname}").performClick()
         composeRule.onAllNodesWithTag("nickname-picker").assertCountEquals(0)
+        composeRule.waitForIdle()
         val session = requireNotNull(FakeSessionFactory.lastSession)
 
         // The real MainActivity starts with a one-player game, so the duplicate labels stay hidden.
@@ -68,8 +70,9 @@ class MainActivityTest {
 
         session.publish(connectedPlayers = 2, activeSessionId = "other")
         composeRule.onNodeWithTag("player-indicators").performScrollTo().assertIsDisplayed()
-        composeRule.onNodeWithText("Current player").assertIsDisplayed()
-        composeRule.onNodeWithText("You").assertIsDisplayed()
+        val isRtl = composeRule.activity.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
+        composeRule.onNodeWithText(if (isRtl) "השחקן הנוכחי" else "Current player").assertIsDisplayed()
+        composeRule.onNodeWithText(if (isRtl) "אתם" else "You").assertIsDisplayed()
         composeRule.onNodeWithTag("current-player-emoji").assertTextEquals(session.otherEmoji)
         composeRule.onNodeWithTag("your-emoji").assertTextEquals(session.nickname)
 
@@ -95,17 +98,23 @@ class MainActivityTest {
     }
 
     @Test
-    fun submitsBoomWithLeftArrowOnAnActiveTurn() {
+    fun submitsBoomWithArrowMappedToBoomInTheActiveLayout() {
         val beforePicker = requireNotNull(FakeSessionFactory.lastSession)
         if (composeRule.onAllNodesWithTag("nickname-picker").fetchSemanticsNodes().isEmpty()) {
             composeRule.onNodeWithTag("choose-nickname").performClick()
         }
         composeRule.onNodeWithTag("nickname-choice-${beforePicker.nickname}").performClick()
-        val session = requireNotNull(FakeSessionFactory.lastSession)
         composeRule.waitForIdle()
+        val session = requireNotNull(FakeSessionFactory.lastSession)
 
-        InstrumentationRegistry.getInstrumentation().sendKeyDownUpSync(KeyEvent.KEYCODE_DPAD_LEFT)
+        val boomKey = if (
+            composeRule.activity.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
+        ) KeyEvent.KEYCODE_DPAD_RIGHT else KeyEvent.KEYCODE_DPAD_LEFT
         composeRule.runOnIdle {
+            assertTrue(
+                "The active game's arrow control should handle the key",
+                composeRule.activity.dispatchKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, boomKey)),
+            )
             assertEquals(listOf("turn-1"), session.boomAnswers)
         }
     }

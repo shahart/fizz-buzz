@@ -14,29 +14,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            worker/package-lock.json
-            docs/package-lock.json
+          cache: pnpm
 
-      - name: Install Worker dependencies
-        run: npm ci --prefix worker
-
-      - name: Install web test dependencies
-        run: npm ci --prefix docs
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build TypeScript web client
-        run: npm --prefix docs run build
+        run: pnpm --filter seven-boom-web-tests run build
 
       - name: Install Playwright Chromium
-        run: npx --prefix docs playwright install --with-deps chromium
+        run: pnpm --filter seven-boom-web-tests exec playwright install --with-deps chromium
 
       - name: Type-check and test Worker and web client
-        run: npm --prefix worker run check
+        run: pnpm --filter global-seven-boom-worker run check
 
       - name: Run browser UI tests
-        run: npm --prefix docs run test:browser
+        run: pnpm --filter seven-boom-web-tests run test:browser
