@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "check": "tsc --noEmit && npm test",
-    "test": "vitest run && npm run test:web",
+    "check": "tsc --noEmit && vitest run && node --test ../docs/tests/web-client.test.mjs",
+    "test": "vitest run && node --test ../docs/tests/web-client.test.mjs",
     "test:worker": "vitest run",
     "test:web": "node --test ../docs/tests/web-client.test.mjs",
     "types": "wrangler types worker-configuration.d.ts",

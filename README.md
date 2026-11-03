@@ -10,13 +10,12 @@ Use JDK 17 through 24.
 
 ```bash
 # From the repository root: install web dependencies and compile TypeScript
-npm --prefix docs ci
-npm --prefix docs run build
+pnpm install --frozen-lockfile
+pnpm --filter seven-boom-web-tests run build
 
 # Terminal 1: start the Worker and serve the web client
 cd worker
-npm ci
-npm run dev
+pnpm run dev
 ```
 
 In another terminal, from the repository root:
@@ -35,26 +34,24 @@ Open `http://localhost:8787` in two browser windows to exercise the global rotat
 Run the Worker type-check, Durable Object tests, and web-client unit tests from the repository root:
 
 ```bash
-npm --prefix worker ci
-npm --prefix worker run check
+pnpm --filter global-seven-boom-worker run check
 ```
 
 Run the web-client unit tests and build with:
 
 ```bash
-npm --prefix docs ci
-npm --prefix docs test
-npm --prefix docs run build
+pnpm --filter seven-boom-web-tests test
+pnpm --filter seven-boom-web-tests run build
 ```
 
 Run the browser tests from `docs/`. They start a local static server and use Playwright Chromium with a mocked WebSocket, so no deployed Worker is needed. Build the web client first so the static server can load the compiled modules:
 
 ```bash
-npx --prefix docs playwright install chromium
-npm --prefix docs run test:browser
+pnpm --filter seven-boom-web-tests exec playwright install chromium
+pnpm --filter seven-boom-web-tests run test:browser
 ```
 
-Add `-- --headed` to `npm --prefix docs run test:browser` to see Chromium perform the test actions. Run with `-- --workers=1` to watch the scenarios one at a time.
+Add `-- --headed` to `pnpm --filter seven-boom-web-tests run test:browser` to see Chromium perform the test actions. Run with `-- --workers=1` to watch the scenarios one at a time.
 
 Run the Android/Kotlin tests with:
 
