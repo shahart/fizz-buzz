@@ -60,6 +60,8 @@
     <string name="continue_solo">המשך</string>
     <string name="waiting">ממתינים</string>
     <string name="your_turn">התור שלך</string>
+    <string name="current_player">השחקן הנוכחי</string>
+    <string name="you">אתם</string>
     <string name="answer_with_number">תשובה במספר</string>
     <string name="connected_players">%1$d שחקנים מחוברים</string>
     <string name="roster_active_turn">טבעת כחולה: התור הפעיל</string>
@@ -82,6 +84,9 @@
     <string name="response_time_rank">דירוג זמן תגובה: %1$d מתוך %2$d</string>
     <string name="response_time_unranked">דירוג זמן תגובה: —</string>
     <string name="winner">המנצח:</string>
+    <string name="you_won">ניצחתם!</string>
+    <string name="you_won_message">הייתם בין השחקנים המהירים ביותר. משחק נהדר!</string>
+    <string name="spectator_message">המשחק הסתיים — לא ניצחתם ולא הייתם השחקנים שטעו.</string>
     <string name="latency">השהיה: %1$s אלפיות שנייה</string>
     <!-- -->
 

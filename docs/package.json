@@ -1,0 +1,14 @@
+{
+  "name": "seven-boom-web-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/web-client.test.mjs",
+    "test:browser": "playwright test",
+    "build": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "typescript": "^7.0.2"
+  }
+}

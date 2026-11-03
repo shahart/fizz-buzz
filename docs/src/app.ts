@@ -1,4 +1,7 @@
-import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, recognizedAnswer, remainingProgress, remainingSeconds, responseMillis } from "./game-core.mjs";
+import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, playerIndicatorsMarkup, recognizedAnswer, remainingProgress, remainingSeconds, responseMillis } from "../game-core.mjs";
+import { COPY } from "./copy.js";
+import { createRenderer } from "./render.js";
+import { bindUiEvents } from "./events.js";
 
 (() => {
   "use strict";
@@ -10,48 +13,7 @@ import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, recognizedAnswer
     { id: "midnight", unlock: 77, label: "midnight", colors: ["#e7ecff", "#171b34", "#8798ff", "#ff667a"] },
   ];
   const NICKNAMES = new Set(EMOJIS);
-  const COPY = {
-    en: {
-      brand: "SEVEN BOOM", ready: "Ready?", welcome: "A fast global number game.",
-      nickname: "Your emoji nickname", chooseEmoji: "Choose an emoji", nicknameEyebrow: "Make it yours",
-      preferences: "Personalize", themes: "Choose a theme", theme: "Theme", classic: "Classic", mint: "Mint", sunset: "Sunset", midnight: "Midnight",
-      locked: "Best {n} to unlock", selected: "Selected", close: "Close", join: "Join game", rejoin: "Rejoin game",
-      instructions: "Say or tap the number. Use BOOM 💣 for multiples of 7 and numbers containing 7.",
-      speechUnavailable: "Speech recognition is unavailable here. The answer buttons are ready.", keyboard: "On a keyboard, use ← or →.",
-      best: "Best {n}", lowest: "Fastest {n}s", average: "Average {n}s", personalRecords: "Personal records",
-      joining: "Joining the global game…", joiningHint: "Getting the next turn ready", yourTurn: "Your turn", waiting: "Waiting for your turn",
-      players: "{n} players", liveGame: "Live game", activeTurn: "Blue ring marks the active turn.", rosterLoading: "Loading players…",
-      seconds: "seconds left", boom: "BOOM", wrong: "Wrong answer", timeUp: "Time is up", otherWrong: "Another player gave a wrong answer",
-      answerNumber: "Answer with the number",
-      otherTimeout: "Another player ran out of time", feedbackNumber: "The correct answer was {n}.",
-      feedbackDivisible: "{n} is divisible by 7, so the answer is BOOM.", feedbackContains: "{n} contains 7, so the answer is BOOM.",
-      feedbackBoth: "{n} is divisible by 7 and contains 7, so the answer is BOOM.", winner: "Fastest players", playAgain: "Play again",
-      rank: "Response-time rank: {rank} of {total}", unranked: "Response-time rank: —", latency: "Latency {n} ms",
-      connection: "Connection", soloTitle: "Playing offline", soloMessage: "The global game is unavailable. Continue with a local single-player round?",
-      continue: "Continue offline", statusOffline: "Offline game", speechListening: "Listening…", speechUnavailableShort: "Tap to answer",
-      voiceHeard: "Heard: {text}", themeButton: "Colors", rosterButton: "Players", home: "Back to lobby",
-    },
-    he: {
-      brand: "בום שבע", ready: "מוכנים?", welcome: "משחק מספרים עולמי ומהיר.",
-      nickname: "כינוי האימוג׳י שלך", chooseEmoji: "בחירת אימוג׳י", nicknameEyebrow: "בוחרים כינוי",
-      preferences: "התאמה אישית", themes: "בחירת ערכת צבעים", theme: "ערכת צבעים", classic: "קלאסית", mint: "מנטה", sunset: "שקיעה", midnight: "חצות",
-      locked: "נדרש שיא של {n} לפתיחה", selected: "נבחרה", close: "סגירה", join: "הצטרפות למשחק", rejoin: "הצטרפות מחדש",
-      instructions: "אמרו או לחצו על המספר. השתמשו בבום 💣 עבור כפולות של 7 ומספרים שמכילים 7.",
-      speechUnavailable: "זיהוי דיבור אינו זמין כאן. אפשר לענות בעזרת הכפתורים.", keyboard: "במקלדת אפשר להשתמש בחצים ← ו־→.",
-      best: "שיא {n}", lowest: "הכי מהיר {n} שנ׳", average: "ממוצע {n} שנ׳", personalRecords: "השיאים האישיים",
-      joining: "מצטרפים למשחק העולמי…", joiningHint: "מכינים את התור הבא", yourTurn: "התור שלך", waiting: "ממתינים לתור שלך",
-      players: "{n} שחקנים", liveGame: "משחק חי", activeTurn: "הטבעת הכחולה מסמנת את התור הפעיל.", rosterLoading: "טוענים שחקנים…",
-      seconds: "שניות נותרו", boom: "בום", wrong: "תשובה שגויה", timeUp: "הזמן נגמר", otherWrong: "שחקן אחר נתן תשובה שגויה",
-      answerNumber: "תשובה במספר",
-      otherTimeout: "לשחקן אחר נגמר הזמן", feedbackNumber: "התשובה הנכונה הייתה {n}.",
-      feedbackDivisible: "{n} מתחלק ב־7, לכן התשובה היא בום.", feedbackContains: "הספרה 7 מופיעה ב־{n}, לכן התשובה היא בום.",
-      feedbackBoth: "{n} מתחלק ב־7 וגם מכיל 7, לכן התשובה היא בום.", winner: "השחקנים המהירים", playAgain: "לשחק שוב",
-      rank: "דירוג זמן תגובה: {rank} מתוך {total}", unranked: "דירוג זמן תגובה: —", latency: "השהיה {n} אלפיות שנייה",
-      connection: "חיבור", soloTitle: "משחקים ללא חיבור", soloMessage: "המשחק העולמי אינו זמין. להמשיך במשחק מקומי לשחקן יחיד?",
-      continue: "המשך ללא חיבור", statusOffline: "משחק לא מקוון", speechListening: "מקשיבים…", speechUnavailableShort: "לחצו כדי לענות",
-      voiceHeard: "שמעתי: {text}", themeButton: "צבעים", rosterButton: "שחקנים", home: "חזרה ללובי",
-    },
-  };
+
 
   const locale = (navigator.language || "en").toLowerCase();
   const isHebrew = locale.startsWith("he");
@@ -59,16 +21,16 @@ import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, recognizedAnswer
   const strings = COPY[lang];
   document.documentElement.lang = lang;
   document.documentElement.dir = isHebrew ? "rtl" : "ltr";
-  document.title = isHebrew ? "בום שבע" : "7-Boom";
+  document.title = (isHebrew ? "בום שבע" : "7-Boom") + " v1.11";
 
-  const root = document.getElementById("app");
+  const root = document.getElementById("app")!;
   const byId = (id) => document.getElementById(id);
-  const nicknameDialog = byId("nickname-dialog");
-  const themeDialog = byId("theme-dialog");
-  const rosterDialog = byId("roster-dialog");
-  const offlineDialog = byId("offline-dialog");
+  const nicknameDialog = byId("nickname-dialog") as HTMLDialogElement;
+  const themeDialog = byId("theme-dialog") as HTMLDialogElement;
+  const rosterDialog = byId("roster-dialog") as HTMLDialogElement;
+  const offlineDialog = byId("offline-dialog") as HTMLDialogElement;
   const sessionId = makeSessionId();
-  const state = {
+  const state: any = {
     connection: "idle", socket: null, snapshot: null, roster: [], rosterRevision: -1,
     offset: 0, nickname: storageGet("seven-boom-nickname-emoji", "😀"),
     theme: storageGet("seven-boom-theme", "classic"), best: numberGet("seven-boom-best-number"),
@@ -117,6 +79,7 @@ import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, recognizedAnswer
     return typeof timeZone === "string" ? timeZone.split("/").pop().replaceAll("_", " ") : "";
   }
   function currentTheme() { return THEMES.find((theme) => theme.id === state.theme) || THEMES[0]; }
+  function desktopKeyboardHint() { return window.matchMedia("(min-width: 768px)").matches; }
   function applyTheme() {
     const [ink, sky, blue, red] = currentTheme().colors;
     const style = document.documentElement.style;
@@ -139,69 +102,12 @@ import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, recognizedAnswer
       return;
     }
     if ((state.connection === "connected" || state.connection === "solo") && state.snapshot) {
-      renderGame();
+      renderer.renderGame();
       return;
     }
-    renderLobby();
+    renderer.renderLobby();
   }
-  function renderLobby() {
-    document.body.dataset.phase = "lobby";
-    const rejoin = state.connection === "rejoin";
-    const speechLine = speechSupported() ? t("instructions") : t("speechUnavailable");
-    root.innerHTML = `${addTopbar(`<button class="icon-button" type="button" data-action="open-theme" aria-label="${esc(t("themeButton"))}" title="${esc(t("themeButton"))}">◐</button>`)}
-      <section class="stage"><section class="game-card join-card" aria-labelledby="ready-title">
-        <p class="eyebrow">${esc(t("brand"))}</p><h1 id="ready-title" class="hero-title">${esc(t("ready"))}</h1>
-        <p class="subhead">${esc(t("welcome"))}</p>
-        <div class="nickname-block"><span class="field-caption">${esc(t("nickname"))}</span>
-          <button class="nickname-button" type="button" data-action="open-nickname" aria-label="${esc(t("chooseEmoji"))}"><span aria-hidden="true">${esc(state.nickname)}</span><span>${esc(t("chooseEmoji"))}</span></button>
-        </div>
-        <div class="join-options"><button class="quiet-button" type="button" data-action="open-theme">◐ &nbsp;${esc(t("theme"))}: ${esc(t(currentTheme().label))}</button></div>
-        <div class="records" aria-label="${esc(t("personalRecords"))}"><span class="record-pill">${esc(t("best", { n: state.best }))}</span><span class="record-pill">${esc(t("lowest", { n: secondsText(state.lowest) }))}</span></div>
-        <p class="instructions">${esc(speechLine)}</p>
-        ${speechSupported() ? `<p class="keyboard-note">${esc(t("keyboard"))}</p>` : ""}
-        <button class="primary-button join-button" type="button" data-action="join">${esc(t(rejoin ? "rejoin" : "join"))}</button>
-      </section></section><footer class="footer">${esc(t("personalRecords"))} · 7-Boom</footer>`;
-  }
-  function renderGame() {
-    const snapshot = state.snapshot;
-    const failed = snapshot.phase === "gameOver";
-    document.body.dataset.phase = failed ? "game-over" : "active";
-    const ownsTurn = !failed && snapshot.activeSessionId === sessionId;
-    const activeTurn = ownsTurn && state.lastAnsweredTurn !== snapshot.turnId;
-    const gameOverClass = failed ? " game-over-card" : "";
-    let message = "";
-    let clue = "";
-    if (failed) {
-      const mine = snapshot.failedSessionId === sessionId;
-      if (snapshot.gameOverReason === "timeout") message = t(mine ? "timeUp" : "otherTimeout");
-      else if (snapshot.gameOverReason === "wrongAnswer") message = t(mine ? "wrong" : "otherWrong");
-      if (mine && snapshot.gameOverReason === "wrongAnswer") clue = feedback(snapshot.number);
-    } else if (!activeTurn) message = t("waiting");
-
-    const rankings = snapshot.responseRankings || [];
-    const ownRank = rankings.find((rank) => rank.sessionId === sessionId);
-    const averageMs = ownRank?.averageMillis ?? (state.responseCount ? state.responseTotal / state.responseCount : 0);
-    const ownRankText = ownRank ? t("rank", { rank: ownRank.rank, total: rankings.length }) : t("unranked");
-    const winners = failed ? [...new Set(rankings.filter((rank) => rank.rank === 1).map((rank) => rank.nickname).filter((emoji) => NICKNAMES.has(emoji)))] : [];
-    const currentName = failed ? t("boom") : activeTurn ? t("yourTurn") : t("waiting");
-
-    root.innerHTML = `${addTopbar(`<button class="player-chip" type="button" data-action="open-roster"><span aria-hidden="true">👥</span>${esc(t("players", { n: snapshot.connectedPlayers }))}</button>`)}
-      <section class="stage"><section class="game-card${gameOverClass}" aria-label="${esc(currentName)}">
-        <div class="game-topline"><p class="turn-label">${failed ? `<span aria-hidden="true">💣</span> ${esc(currentName)}` : esc(currentName)}</p></div>
-        <div class="number-orb" aria-live="off">${snapshot.number}</div>
-        ${!failed ? `<div id="turn-progress" class="turn-progress" role="progressbar" aria-label="Turn time remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><span id="turn-progress-fill" class="turn-progress-fill"></span></div>` : ""}
-        <p class="game-message">${esc(message || (activeTurn && state.lastHeard ? t("voiceHeard", { text: state.lastHeard }) : ""))}</p>
-        ${clue ? `<p class="game-message">${esc(clue)}</p>` : ""}
-        ${winners.length ? `<p class="winner-line">${esc(t("winner"))} &nbsp;${winners.map(esc).join(" ")}</p>` : ""}
-        ${!failed ? `<div class="answer-row"><button class="answer-button boom" type="button" data-action="answer-boom" ${activeTurn ? "" : "disabled"} aria-label="BOOM">💣</button><button class="answer-button number" type="button" data-action="answer-number" ${activeTurn ? "" : "disabled"} aria-label="${esc(t("answerNumber"))}"></button></div>
-          <p class="keyboard-note">${esc(state.speechTurn === snapshot.turnId ? t("speechListening") : speechSupported() ? t("keyboard") : t("speechUnavailableShort"))}</p>` : `<button class="primary-button play-again" type="button" data-action="play-again">${esc(t("playAgain"))}</button>`}
-        <div class="stats-row"><span>${esc(t("best", { n: state.best }))}</span><span>${esc(t("lowest", { n: secondsText(state.lowest) }))}</span><span>${esc(t("average", { n: secondsText(averageMs) }))}</span>${failed ? `<span>${esc(ownRankText)}</span>` : ""}</div>
-        <p id="latency" class="latency">${esc(t("latency", { n: state.latency ?? "—" }))}${state.connection === "solo" ? ` · ${esc(t("statusOffline"))}` : ""}</p>
-      </section></section><footer class="footer">${esc(t("keyboard"))}</footer>`;
-    updateCountdown();
-    syncSpeech();
-    if (rosterDialog.open) renderRoster();
-  }
+  const renderer = createRenderer({ state, root, addTopbar, t, esc, speechSupported, desktopKeyboardHint, currentTheme, secondsText, feedback, sessionId, NICKNAMES, playerIndicatorsMarkup, updateCountdown, syncSpeech, rosterDialog, renderRoster });
   function secondsText(milliseconds) { return ((Math.max(0, milliseconds) + 50) / 1000).toFixed(1); }
   function feedback(number) {
     if (!isBoom(number)) return t("feedbackNumber", { n: number });
@@ -253,55 +159,7 @@ import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, recognizedAnswer
   }
   function openRoster() { renderRoster(); openDialog(rosterDialog); }
 
-  document.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-action]");
-    if (!button) return;
-    switch (button.dataset.action) {
-      case "join": startOnline(); break;
-      case "open-nickname": showNicknamePicker(); break;
-      case "open-theme": showThemePicker(); break;
-      case "open-roster": openRoster(); break;
-      case "close-nickname": closeDialog(nicknameDialog); break;
-      case "close-theme": closeDialog(themeDialog); break;
-      case "close-roster": closeDialog(rosterDialog); break;
-      case "continue-solo": closeDialog(offlineDialog); startSolo(); break;
-      case "answer-boom": answer("boom"); break;
-      case "answer-number": answer("number"); break;
-      case "play-again": if (state.connection === "solo") startSolo(); else { logLocalEvent("restart_requested"); send({ type: "restart" }); } break;
-    }
-  });
-  byId("emoji-grid").addEventListener("click", (event) => {
-    const choice = event.target.closest("[data-emoji]");
-    if (!choice) return;
-    state.nickname = choice.dataset.emoji;
-    storageSet("seven-boom-nickname-emoji", state.nickname);
-    closeDialog(nicknameDialog);
-    render();
-  });
-  byId("theme-options").addEventListener("click", (event) => {
-    const choice = event.target.closest("[data-theme]");
-    if (!choice || choice.disabled) return;
-    state.theme = choice.dataset.theme;
-    storageSet("seven-boom-theme", state.theme);
-    closeDialog(themeDialog);
-    render();
-  });
-  for (const dialog of [nicknameDialog, themeDialog, rosterDialog]) {
-    dialog.addEventListener("click", (event) => {
-      if (event.target === dialog) dialog.close();
-    });
-  }
-  offlineDialog.addEventListener("cancel", (event) => event.preventDefault());
-  window.addEventListener("keydown", (event) => {
-    if (event.repeat || nicknameDialog.open || themeDialog.open || rosterDialog.open || offlineDialog.open) return;
-    if (state.connection !== "connected" && state.connection !== "solo") return;
-    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-      event.preventDefault();
-      const isBoomKey = isHebrew ? event.key === "ArrowRight" : event.key === "ArrowLeft";
-      answer(isBoomKey ? "boom" : "number");
-    }
-  });
-
+  bindUiEvents({ byId, storageSet, render, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew });
   function startOnline() {
     if (!NICKNAMES.has(state.nickname)) { showNicknamePicker(); return; }
     logLocalEvent("join_started", { mode: "online" });
@@ -388,7 +246,8 @@ import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, recognizedAnswer
     if (!Array.isArray(message.players) || message.players.some((player) => !NICKNAMES.has(player.nickname))) return;
     state.rosterRevision = message.revision;
     state.roster = message.players;
-    if (rosterDialog.open) renderRoster();
+    if (state.snapshot && state.connection === "connected") render();
+    else if (rosterDialog.open) renderRoster();
   }
   function sendPing() {
     if (state.socket?.readyState !== WebSocket.OPEN) return;
@@ -570,11 +429,11 @@ import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, recognizedAnswer
       if (await analyticsSdk.isSupported()) analyticsSdk.getAnalytics(appSdk.initializeApp(config));
     }).catch(() => {});
   }
-  if ("requestIdleCallback" in window) window.requestIdleCallback(loadAnalyticsLater, { timeout: 5000 });
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(loadAnalyticsLater, { timeout: 5000 });
   else window.setTimeout(loadAnalyticsLater, 3500);
 
-  for (const element of document.querySelectorAll("[data-copy]")) element.textContent = t(element.dataset.copy);
-  for (const element of document.querySelectorAll("[data-label]")) element.setAttribute("aria-label", t(element.dataset.label));
+  for (const element of document.querySelectorAll<HTMLElement>("[data-copy]")) element.textContent = t(element.dataset.copy);
+  for (const element of document.querySelectorAll<HTMLElement>("[data-label]")) element.setAttribute("aria-label", t(element.dataset.label));
   applyTheme();
   render();
 })();

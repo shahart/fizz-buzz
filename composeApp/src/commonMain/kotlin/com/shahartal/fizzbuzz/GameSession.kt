@@ -25,14 +25,30 @@ import kotlinx.serialization.json.putJsonObject
 
 private const val LATENCY_PING_INTERVAL_MILLIS = 2_000L
 
+typealias GameSessionFactory = (nickname: String, initialBestNumber: Int, initialLowestResponseTimeMillis: Long) -> GameSessionController
+
+interface GameSessionController {
+    val sessionId: String
+    val nickname: String
+    val state: StateFlow<GameUiState>
+    fun join()
+    fun leaveForFocusLoss()
+    fun restart()
+    fun continueSolo()
+    fun submitBoom(turnId: String)
+    fun submitNumber(turnId: String, number: Int)
+    fun submitRecognition(turnId: String, alternatives: List<String>): Boolean
+    fun close()
+}
+
 class GameSession(
     private val scope: CoroutineScope,
     private val client: HttpClient = createGameHttpClient(),
-    val sessionId: String = anonymousSessionId(),
-    val nickname: String,
+    override val sessionId: String = anonymousSessionId(),
+    override val nickname: String,
     initialBestNumber: Int = 0,
     initialLowestResponseTimeMillis: Long = 0,
-) {
+) : GameSessionController {
     private val json = Json { ignoreUnknownKeys = false; explicitNulls = true }
     private val mutableState = MutableStateFlow(
         GameUiState(
@@ -40,7 +56,7 @@ class GameSession(
             lowestResponseTimeMillis = initialLowestResponseTimeMillis.coerceAtLeast(0),
         ),
     )
-    val state: StateFlow<GameUiState> = mutableState.asStateFlow()
+    override val state: StateFlow<GameUiState> = mutableState.asStateFlow()
     private var connection: DefaultClientWebSocketSession? = null
     private var connectionJob: Job? = null
     private var localDeadlineJob: Job? = null
@@ -50,7 +66,7 @@ class GameSession(
     private var pendingPingId: String? = null
     private var pendingPingStartedAt = 0L
 
-    fun join() {
+    override fun join() {
         if (shouldBeJoined) return
         shouldBeJoined = true
         localDeadlineJob?.cancel()
@@ -58,7 +74,7 @@ class GameSession(
         connectionJob = scope.launch { connectionLoop() }
     }
 
-    fun leaveForFocusLoss() {
+    override fun leaveForFocusLoss() {
         if (!shouldBeJoined) return
         shouldBeJoined = false
         val active = connection
@@ -76,7 +92,7 @@ class GameSession(
         }
     }
 
-    fun restart() {
+    override fun restart() {
         if (mutableState.value.connectionStatus == ConnectionStatus.SOLO) {
             startSoloGame()
         } else {
@@ -84,11 +100,11 @@ class GameSession(
         }
     }
 
-    fun continueSolo() {
+    override fun continueSolo() {
         if (mutableState.value.connectionStatus == ConnectionStatus.SOLO_PENDING) startSoloGame()
     }
 
-    fun submitBoom(turnId: String) {
+    override fun submitBoom(turnId: String) {
         val current = mutableState.value.snapshot
         logGameEvent(
             "answer_submitted",
@@ -97,7 +113,7 @@ class GameSession(
         sendAnswer(turnId, "boom")
     }
 
-    fun submitNumber(turnId: String, number: Int) {
+    override fun submitNumber(turnId: String, number: Int) {
         val currentNumber = mutableState.value.snapshot?.number
         logGameEvent(
             "answer_submitted",
@@ -118,7 +134,7 @@ class GameSession(
         }
     }
 
-    fun submitRecognition(turnId: String, alternatives: List<String>): Boolean {
+    override fun submitRecognition(turnId: String, alternatives: List<String>): Boolean {
         val submission = recognitionSubmission(mutableState.value, sessionId, turnId, alternatives)
         val mappedAnswer = when (submission) {
             null -> "stale_or_inactive"
@@ -136,7 +152,7 @@ class GameSession(
         return true
     }
 
-    fun close() {
+    override fun close() {
         shouldBeJoined = false
         connectionJob?.cancel()
         connectionJob = null

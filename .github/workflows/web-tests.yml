@@ -1,0 +1,42 @@
+name: Web and Worker tests
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Web and Worker tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            worker/package-lock.json
+            docs/package-lock.json
+
+      - name: Install Worker dependencies
+        run: npm ci --prefix worker
+
+      - name: Install web test dependencies
+        run: npm ci --prefix docs
+
+      - name: Build TypeScript web client
+        run: npm --prefix docs run build
+
+      - name: Install Playwright Chromium
+        run: npx --prefix docs playwright install --with-deps chromium
+
+      - name: Type-check and test Worker and web client
+        run: npm --prefix worker run check
+
+      - name: Run browser UI tests
+        run: npm --prefix docs run test:browser

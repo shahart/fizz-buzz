@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -52,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -68,6 +70,7 @@ import fizz_buzz.composeapp.generated.resources.choose_nickname
 import fizz_buzz.composeapp.generated.resources.choose_theme
 import fizz_buzz.composeapp.generated.resources.connected_players
 import fizz_buzz.composeapp.generated.resources.continue_solo
+import fizz_buzz.composeapp.generated.resources.current_player
 import fizz_buzz.composeapp.generated.resources.dismiss_roster
 import fizz_buzz.composeapp.generated.resources.instructions
 import fizz_buzz.composeapp.generated.resources.keyboard_hint
@@ -95,7 +98,11 @@ import fizz_buzz.composeapp.generated.resources.speech_unavailable
 import fizz_buzz.composeapp.generated.resources.time_is_up
 import fizz_buzz.composeapp.generated.resources.waiting
 import fizz_buzz.composeapp.generated.resources.winner
+import fizz_buzz.composeapp.generated.resources.you_won
+import fizz_buzz.composeapp.generated.resources.you_won_message
+import fizz_buzz.composeapp.generated.resources.spectator_message
 import fizz_buzz.composeapp.generated.resources.wrong_answer
+import fizz_buzz.composeapp.generated.resources.you
 import fizz_buzz.composeapp.generated.resources.feedback_divisible_and_contains
 import fizz_buzz.composeapp.generated.resources.feedback_divisible_by_seven
 import fizz_buzz.composeapp.generated.resources.feedback_contains_seven
@@ -115,6 +122,8 @@ private val Sky = Color(0xFFEAF4FF)
 private val Blue = Color(0xFF1473E6)
 private val Red = Color(0xFFD92D20)
 private val AnswerGreen = Color(0xFF16803D)
+private val WinGreen = Color(0xFF16803D)
+private val SpectatorYellow = Color(0xFFD39B00)
 private data class GamePalette(val navy: Color, val sky: Color, val blue: Color, val red: Color)
 private val Palettes = mapOf(
     "classic" to GamePalette(Navy, Sky, Blue, Red),
@@ -127,10 +136,10 @@ private const val MICROPHONE_SETTLE_MILLIS = 150L
 private const val FAILURE_FLASH_COUNT = 2
 
 @Composable
-fun App(compact: Boolean = false) {
+fun App(compact: Boolean = false, sessionFactory: GameSessionFactory? = null) {
     val direction = if (stringResource(Res.string.layout_direction) == "rtl") LayoutDirection.Rtl else LayoutDirection.Ltr
     CompositionLocalProvider(LocalLayoutDirection provides direction) {
-        MaterialTheme(typography = fizzBuzzTypography()) { MultiplayerGame(compact) }
+        MaterialTheme(typography = fizzBuzzTypography()) { MultiplayerGame(compact, sessionFactory) }
     }
 }
 
@@ -161,7 +170,7 @@ private fun fizzBuzzTypography(): Typography {
 }
 
 @Composable
-private fun MultiplayerGame(compact: Boolean) {
+private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory?) {
     val scope = rememberCoroutineScope()
     val bestNumberStore = rememberBestNumberStore()
     var selectedTheme by remember(bestNumberStore) { mutableStateOf(bestNumberStore.loadTheme().takeIf(Palettes::containsKey) ?: "classic") }
@@ -171,13 +180,13 @@ private fun MultiplayerGame(compact: Boolean) {
     }
     var showNicknamePicker by remember { mutableStateOf(nickname == null) }
     var showRoster by remember { mutableStateOf(false) }
-    val session = remember(bestNumberStore, nickname) {
-        GameSession(
-            scope,
-            nickname = nickname ?: DEFAULT_EMOJI_NICKNAME,
-            initialBestNumber = bestNumberStore.load(),
-            initialLowestResponseTimeMillis = bestNumberStore.loadLowestResponseTimeMillis(),
-        )
+    var showWinnerDialog by remember { mutableStateOf(false) }
+    val session = remember(bestNumberStore, nickname, sessionFactory) {
+        val selectedNickname = nickname ?: DEFAULT_EMOJI_NICKNAME
+        val bestNumber = bestNumberStore.load()
+        val lowestResponseTime = bestNumberStore.loadLowestResponseTimeMillis()
+        sessionFactory?.invoke(selectedNickname, bestNumber, lowestResponseTime)
+            ?: GameSession(scope, nickname = selectedNickname, initialBestNumber = bestNumber, initialLowestResponseTimeMillis = lowestResponseTime)
     }
     val uiState by session.state.collectAsState()
     val snapshot = uiState.snapshot
@@ -303,14 +312,23 @@ private fun MultiplayerGame(compact: Boolean) {
         }
     }
 
+    LaunchedEffect(snapshot?.phase, snapshot?.failedSessionId) {
+        showWinnerDialog = snapshot?.resultFor(session.sessionId) == GameResult.WINNER
+    }
+
     LaunchedEffect(snapshot?.phase) {
         if (snapshot?.phase == GamePhase.ACTIVE) contentScrollState.scrollTo(0)
     }
 
     val failed = snapshot?.phase == GamePhase.GAME_OVER && snapshot.gameOverReason != GameOverReason.NO_PLAYERS
+    val gameResult = snapshot?.resultFor(session.sessionId) ?: GameResult.NONE
     val palette = Palettes.getValue(selectedTheme)
     val background = when {
+        failed && failureBlinking && gameResult == GameResult.WINNER -> WinGreen.copy(alpha = failureFlashAlpha.value)
+        failed && failureBlinking && gameResult == GameResult.SPECTATOR -> SpectatorYellow.copy(alpha = failureFlashAlpha.value)
         failed && failureBlinking -> palette.red.copy(alpha = failureFlashAlpha.value)
+        failed && gameResult == GameResult.WINNER -> WinGreen
+        failed && gameResult == GameResult.SPECTATOR -> SpectatorYellow
         failed -> palette.red
         else -> palette.sky
     }
@@ -347,6 +365,8 @@ private fun MultiplayerGame(compact: Boolean) {
                         ConnectionStatus.SOLO_PENDING -> StatusText(stringResource(Res.string.solo_mode_title))
                         ConnectionStatus.CONNECTED, ConnectionStatus.SOLO -> if (snapshot != null) GamePanel(
                             snapshot = snapshot,
+                            roster = uiState.roster,
+                            nickname = nickname ?: DEFAULT_EMOJI_NICKNAME,
                             sessionId = session.sessionId,
                             activeTurn = activeTurn,
                             turnProgress = uiState.turnProgress(now),
@@ -377,6 +397,14 @@ private fun MultiplayerGame(compact: Boolean) {
                 },
                 onDismiss = { if (nickname != null) showNicknamePicker = false },
                 compact = compact,
+            )
+        }
+        if (showWinnerDialog) {
+            AlertDialog(
+                onDismissRequest = { showWinnerDialog = false },
+                title = { Text(stringResource(Res.string.you_won), fontWeight = FontWeight.Bold) },
+                text = { Text(stringResource(Res.string.you_won_message)) },
+                confirmButton = { TextButton(onClick = { showWinnerDialog = false }) { Text(stringResource(Res.string.dismiss_roster)) } },
             )
         }
         if (showRoster && snapshot != null) {
@@ -475,7 +503,7 @@ private fun JoinPanel(
     Text(stringResource(Res.string.ready), color = palette.navy, fontSize = if (compact) 24.sp else 32.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(if (compact) 6.dp else 16.dp))
     Text(stringResource(Res.string.choose_nickname), color = palette.navy.copy(alpha = .7f), fontSize = if (compact) 12.sp else 15.sp)
-    TextButton(onClick = onChooseNickname, shape = RoundedCornerShape(14.dp)) {
+    TextButton(onClick = onChooseNickname, modifier = Modifier.testTag("choose-nickname"), shape = RoundedCornerShape(14.dp)) {
         if (nickname == null) {
             Text(stringResource(Res.string.choose_emoji), fontSize = 18.sp)
         } else {
@@ -508,6 +536,7 @@ private fun JoinPanel(
 private fun EmojiNicknamePicker(selected: String?, onSelect: (String) -> Unit, onDismiss: () -> Unit, compact: Boolean) {
     val palette = LocalPalette.current
     AlertDialog(
+        modifier = Modifier.testTag("nickname-picker"),
         onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.choose_emoji), fontWeight = FontWeight.Bold) },
         text = {
@@ -524,7 +553,7 @@ private fun EmojiNicknamePicker(selected: String?, onSelect: (String) -> Unit, o
                         emojis.forEach { emoji ->
                             TextButton(
                                 onClick = { onSelect(emoji) },
-                                modifier = Modifier.size(if (compact) 40.dp else 48.dp),
+                                modifier = Modifier.size(if (compact) 40.dp else 48.dp).testTag("nickname-choice-$emoji"),
                                 shape = CircleShape,
                                 contentPadding = PaddingValues(0.dp),
                                 colors = ButtonDefaults.textButtonColors(
@@ -627,6 +656,8 @@ private fun playerLocationLabel(countryCode: String?, timeZone: String?): String
 @Composable
 private fun GamePanel(
     snapshot: GameSnapshot,
+    roster: GameRoster?,
+    nickname: String,
     sessionId: String,
     activeTurn: Boolean,
     turnProgress: Float,
@@ -643,6 +674,20 @@ private fun GamePanel(
 ) {
     val palette = LocalPalette.current
     val failed = snapshot.phase == GamePhase.GAME_OVER
+    val currentPlayerEmoji = roster.nicknameFor(snapshot.activeSessionId)
+    val yourEmoji = nickname
+    val gameResult = snapshot.resultFor(sessionId)
+    val gameOverTextColor = if (gameResult == GameResult.LOSER || gameResult == GameResult.NONE) Color.White else Color(0xFF103B24)
+    if (!failed) {
+        PlayerIndicators(
+            connectedPlayers = snapshot.connectedPlayers,
+            currentPlayerEmoji = currentPlayerEmoji ?: "❔",
+            yourEmoji = yourEmoji,
+            currentPlayerLabel = stringResource(Res.string.current_player),
+            youLabel = stringResource(Res.string.you),
+            compact = compact,
+        )
+    }
     if (failed) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -656,7 +701,7 @@ private fun GamePanel(
                 BombSymbol(Modifier.size(if (compact) 32.dp else 48.dp), fontSize = if (compact) 32.sp else 48.sp)
                 Text(
                     text = stringResource(Res.string.boom).replace("💣", "").trim(),
-                    color = Color.White,
+                    color = gameOverTextColor,
                     fontSize = if (compact) 32.sp else 56.sp,
                     fontWeight = FontWeight.Black,
                 )
@@ -674,7 +719,7 @@ private fun GamePanel(
             ) {
                 Text(
                     stringResource(Res.string.winner),
-                    color = Color.White,
+                    color = gameOverTextColor,
                     fontSize = if (compact) 18.sp else 28.sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
@@ -726,6 +771,7 @@ private fun GamePanel(
         }
     }
     val statusMessage = when {
+            gameResult == GameResult.SPECTATOR -> stringResource(Res.string.spectator_message)
             snapshot.gameOverReason == GameOverReason.TIMEOUT && snapshot.failedByAnotherPlayer(sessionId) ->
                 stringResource(Res.string.someone_else_timed_out)
             snapshot.gameOverReason == GameOverReason.TIMEOUT -> stringResource(Res.string.time_is_up)
@@ -738,7 +784,7 @@ private fun GamePanel(
     if (statusMessage != null) {
         Text(
             text = statusMessage,
-            color = if (failed) Color.White else palette.navy.copy(alpha = .7f),
+            color = if (failed) gameOverTextColor else palette.navy.copy(alpha = .7f),
             fontSize = if (compact) 12.sp else 16.sp,
             textAlign = TextAlign.Center,
         )
@@ -750,7 +796,7 @@ private fun GamePanel(
             snapshot.number % 7 == 0 -> stringResource(Res.string.feedback_divisible_by_seven, snapshot.number)
             else -> stringResource(Res.string.feedback_contains_seven, snapshot.number)
         }
-        Text(clue, color = Color.White, fontSize = if (compact) 12.sp else 15.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
+        Text(clue, color = gameOverTextColor, fontSize = if (compact) 12.sp else 15.sp, textAlign = TextAlign.Center, fontWeight = FontWeight.Medium)
     }
     if (!failed) {
         Spacer(Modifier.height(if (compact) 4.dp else 20.dp))
@@ -782,21 +828,21 @@ private fun GamePanel(
     Spacer(Modifier.height(if (compact) 2.dp else 10.dp))
     Text(
         text = stringResource(Res.string.record, bestNumber),
-        color = if (failed) Color.White.copy(alpha = .9f) else palette.navy.copy(alpha = .7f),
+        color = if (failed) gameOverTextColor.copy(alpha = .9f) else palette.navy.copy(alpha = .7f),
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
     )
     Text(
         text = stringResource(Res.string.lowest_response_time, lowestResponseTime),
-        color = if (failed) Color.White.copy(alpha = .9f) else palette.navy.copy(alpha = .7f),
+        color = if (failed) gameOverTextColor.copy(alpha = .9f) else palette.navy.copy(alpha = .7f),
         fontSize = 12.sp,
         fontWeight = FontWeight.Bold,
         textAlign = TextAlign.Center,
     )
     Text(
         text = stringResource(Res.string.average_response_time, averageResponseTime),
-        color = if (failed) Color.White.copy(alpha = .85f) else palette.navy.copy(alpha = .65f),
+        color = if (failed) gameOverTextColor.copy(alpha = .85f) else palette.navy.copy(alpha = .65f),
         fontSize = 12.sp,
         textAlign = TextAlign.Center,
     )
@@ -812,7 +858,7 @@ private fun GamePanel(
                 } else {
                     stringResource(Res.string.response_time_rank, rank.first, rank.second)
                 },
-                color = Color.White,
+                color = gameOverTextColor,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,
@@ -823,10 +869,47 @@ private fun GamePanel(
     }
     Text(
         text = stringResource(Res.string.latency, latencyMillis?.toString() ?: "—"),
-        color = if (failed) Color.White.copy(alpha = .7f) else palette.navy.copy(alpha = .5f),
+        color = if (failed) gameOverTextColor.copy(alpha = .7f) else palette.navy.copy(alpha = .5f),
         fontSize = 9.sp,
         textAlign = TextAlign.Center,
     )
+}
+
+@Composable
+internal fun PlayerIndicators(
+    connectedPlayers: Int,
+    currentPlayerEmoji: String,
+    yourEmoji: String,
+    currentPlayerLabel: String,
+    youLabel: String,
+    compact: Boolean,
+) {
+    if (connectedPlayers <= 1) return
+    Row(
+        modifier = Modifier.fillMaxWidth().testTag("player-indicators"),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        PlayerEmojiBadge(currentPlayerEmoji, currentPlayerLabel, compact, "current-player-emoji")
+        Spacer(Modifier.width(6.dp))
+        PlayerEmojiBadge(yourEmoji, youLabel, compact, "your-emoji")
+    }
+}
+
+@Composable
+private fun PlayerEmojiBadge(emoji: String, label: String, compact: Boolean, emojiTag: String) {
+    val palette = LocalPalette.current
+    Row(
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(Color.White.copy(alpha = .78f))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        EmojiNicknameSymbol(emoji, modifier = Modifier.testTag(emojiTag), fontSize = if (compact) 15.sp else 18.sp)
+        Text(label, color = palette.navy.copy(alpha = .68f), fontSize = if (compact) 9.sp else 11.sp, fontWeight = FontWeight.Bold)
+    }
 }
 
 @Composable

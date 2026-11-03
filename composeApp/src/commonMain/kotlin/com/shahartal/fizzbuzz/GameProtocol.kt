@@ -66,6 +66,11 @@ data class GameRoster(
     val players: List<RosterPlayer>,
 )
 
+fun GameRoster?.nicknameFor(sessionId: String?): String? =
+    sessionId?.let { id -> this?.players?.firstOrNull { it.sessionId == id }?.nickname }
+
+fun GameSnapshot.hasMultiplePlayers(): Boolean = connectedPlayers > 1
+
 @Serializable
 data class PongMessage(val type: String, val id: String)
 
@@ -79,11 +84,33 @@ fun GameSnapshot.responseRank(sessionId: String): Pair<Int, Int>? {
     return mine.rank to rankings.size
 }
 
-fun GameSnapshot.winningNicknames(): List<String> =
-    if (phase != GamePhase.GAME_OVER) emptyList() else responseRankings.orEmpty()
-        .filter { it.rank == 1 }
+enum class GameResult { WINNER, SPECTATOR, LOSER, NONE }
+
+fun GameSnapshot.resultFor(sessionId: String): GameResult {
+    if (phase != GamePhase.GAME_OVER || gameOverReason == GameOverReason.NO_PLAYERS) return GameResult.NONE
+    if (failedSessionId == sessionId) return GameResult.LOSER
+    if (failedSessionId == null) return GameResult.NONE
+    val playerCount = maxOf(rankingsCount(), connectedPlayers)
+    if (playerCount == 2) return GameResult.WINNER
+    val survivingRank = responseRankings.orEmpty()
+        .filter { it.sessionId != failedSessionId }
+        .minOfOrNull { it.rank }
+    val ownRank = responseRankings.orEmpty().firstOrNull { it.sessionId == sessionId }?.rank
+    if (playerCount >= 3 && ownRank != null && ownRank == survivingRank) return GameResult.WINNER
+    if (playerCount >= 3) return GameResult.SPECTATOR
+    return GameResult.NONE
+}
+
+private fun GameSnapshot.rankingsCount(): Int = responseRankings.orEmpty().size
+
+fun GameSnapshot.winningNicknames(): List<String> {
+    if (phase != GamePhase.GAME_OVER) return emptyList()
+    val survivors = responseRankings.orEmpty().filter { it.sessionId != failedSessionId }
+    val bestRank = survivors.minOfOrNull { it.rank } ?: return emptyList()
+    return survivors.filter { it.rank == bestRank }
         .mapNotNull { it.nickname?.takeIf(::isEmojiNickname) }
         .distinct()
+}
 
 enum class ConnectionStatus { IDLE, JOINING, CONNECTED, RECONNECTING, REJOIN, SOLO_PENDING, SOLO }
 

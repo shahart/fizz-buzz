@@ -43,6 +43,27 @@ class GameProtocolTest {
     }
 
     @Test
+    fun findsNicknamesForTheActivePlayerAndCurrentUser() {
+        val roster = GameRoster(
+            "roster",
+            revision = 4,
+            players = listOf(RosterPlayer("a", "🚀"), RosterPlayer("b", "🦊")),
+        )
+
+        assertEquals("🚀", roster.nicknameFor("a"))
+        assertEquals("🦊", roster.nicknameFor("b"))
+        assertNull(roster.nicknameFor("missing"))
+        assertNull(roster.nicknameFor(null))
+    }
+
+    @Test
+    fun showsPlayerIndicatorsOnlyWhenMoreThanOnePlayerIsConnected() {
+        assertFalse(active.copy(connectedPlayers = 0).hasMultiplePlayers())
+        assertFalse(active.copy(connectedPlayers = 1).hasMultiplePlayers())
+        assertTrue(active.copy(connectedPlayers = 2).hasMultiplePlayers())
+    }
+
+    @Test
     fun rosterReducerRequiresCurrentRevisionAndValidEmojiNicknames() {
         val current = GameRoster("roster", revision = 4, players = listOf(RosterPlayer("a", "🦊")))
         val state = GameUiState(snapshot = active).reduce(current)
@@ -86,6 +107,48 @@ class GameProtocolTest {
         )
         assertEquals("1.8", finished.averageResponseTimeText("a"))
         assertEquals(listOf("🐼"), finished.snapshot?.winningNicknames())
+    }
+
+    @Test
+    fun classifiesWinnerSpectatorAndLoserAtGameOver() {
+        val rankings = listOf(
+            ResponseRanking("a", rank = 1, averageMillis = 900),
+            ResponseRanking("b", rank = 2, averageMillis = 1_100),
+            ResponseRanking("c", rank = 3, averageMillis = 1_300),
+        )
+        val gameOver = active.copy(
+            phase = GamePhase.GAME_OVER,
+            gameOverReason = GameOverReason.WRONG_ANSWER,
+            failedSessionId = "c",
+            connectedPlayers = 3,
+            responseRankings = rankings,
+        )
+
+        assertEquals(GameResult.WINNER, gameOver.resultFor("a"))
+        assertEquals(GameResult.SPECTATOR, gameOver.resultFor("b"))
+        assertEquals(GameResult.LOSER, gameOver.resultFor("c"))
+        assertEquals(GameResult.NONE, active.resultFor("a"))
+    }
+
+    @Test
+    fun failedPlayerCannotWinAndTwoPlayerSurvivorWinsRegardlessOfRank() {
+        val twoPlayerGame = active.copy(
+            phase = GamePhase.GAME_OVER,
+            gameOverReason = GameOverReason.WRONG_ANSWER,
+            failedSessionId = "a",
+            connectedPlayers = 2,
+            responseRankings = listOf(
+                ResponseRanking("a", rank = 1, averageMillis = 500),
+                ResponseRanking("b", rank = 2, averageMillis = 700),
+            ),
+        )
+
+        assertEquals(GameResult.LOSER, twoPlayerGame.resultFor("a"))
+        assertEquals(GameResult.WINNER, twoPlayerGame.resultFor("b"))
+        assertEquals(listOf("🐼"), twoPlayerGame.copy(responseRankings = listOf(
+            ResponseRanking("a", rank = 1, averageMillis = 500, nickname = "🦊"),
+            ResponseRanking("b", rank = 2, averageMillis = 700, nickname = "🐼"),
+        )).winningNicknames())
     }
 
     @Test

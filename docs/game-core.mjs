@@ -24,6 +24,21 @@ export function isBoom(number) {
   return number % 7 === 0 || String(number).includes("7");
 }
 
+export function hasMultiplePlayers(connectedPlayers) {
+  return connectedPlayers > 1;
+}
+
+export function playerIndicatorsMarkup({ connectedPlayers, currentEmoji, yourEmoji, currentLabel, youLabel, active = true }) {
+  if (!active || !hasMultiplePlayers(connectedPlayers)) return "";
+  const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[char]);
+  return `<div class="player-corner" aria-label="${escape(currentLabel)}: ${escape(currentEmoji)}; ${escape(youLabel)}: ${escape(yourEmoji)}">
+    <span class="player-corner-item"><span class="player-corner-emoji" aria-hidden="true">${escape(currentEmoji)}</span><span>${escape(currentLabel)}</span></span>
+    <span class="player-corner-item"><span class="player-corner-emoji" aria-hidden="true">${escape(yourEmoji)}</span><span>${escape(youLabel)}</span></span>
+  </div>`;
+}
+
 export function remainingSeconds(deadline, serverOffset = 0, now = Date.now()) {
   if (deadline == null) return 0;
   return Math.max(0, Math.min(7, Math.ceil((deadline - (now + serverOffset)) / 1_000)));

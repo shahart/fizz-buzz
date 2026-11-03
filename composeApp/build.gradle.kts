@@ -58,7 +58,17 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
         }
+        androidInstrumentedTest.dependencies {
+            implementation(libs.compose.ui.test.junit4)
+            implementation(libs.androidx.test.runner)
+            implementation(libs.androidx.test.junit)
+            implementation(libs.androidx.espresso.core)
+        }
     }
+}
+
+dependencies {
+    debugImplementation(libs.compose.ui.test.manifest)
 }
 
 extensions.configure<ApplicationExtension> {
@@ -67,10 +77,11 @@ extensions.configure<ApplicationExtension> {
 
     defaultConfig {
         applicationId = "com.shahartal.fizzbuzz"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.1"
+        versionCode = 8
+        versionName = "1.11"
         val workerUrl = providers.gradleProperty("gameWorkerUrl")
             .orElse("wss://global-seven-boom.lat-shahar.workers.dev/game")
             .get()

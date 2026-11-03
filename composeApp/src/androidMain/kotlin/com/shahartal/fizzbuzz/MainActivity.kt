@@ -9,6 +9,11 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val isWatch = packageManager.hasSystemFeature(PackageManager.FEATURE_WATCH)
-        setContent { App(compact = isWatch) }
+        setContent { App(compact = isWatch, sessionFactory = sessionFactoryOverride) }
+    }
+
+    companion object {
+        @Volatile
+        var sessionFactoryOverride: GameSessionFactory? = null
     }
 }

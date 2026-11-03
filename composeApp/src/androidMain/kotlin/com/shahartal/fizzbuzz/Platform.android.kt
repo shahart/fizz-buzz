@@ -2,10 +2,12 @@ package com.shahartal.fizzbuzz
 
 import android.net.Uri
 import android.util.Log
+import android.view.KeyEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -29,10 +31,25 @@ actual fun logGameEvent(event: String, details: String) {
     Log.i("SevenBoom", "$event $details")
 }
 
-actual val supportsWebKeyboardControls: Boolean = false
+actual val supportsWebKeyboardControls: Boolean = true
 
 @Composable
-actual fun ObserveWebKeyboardControls(enabled: Boolean, onLeft: () -> Unit, onRight: () -> Unit) = Unit
+actual fun ObserveWebKeyboardControls(enabled: Boolean, onLeft: () -> Unit, onRight: () -> Unit) {
+    val view = LocalView.current
+    DisposableEffect(view, enabled, onLeft, onRight) {
+        view.isFocusableInTouchMode = true
+        view.setOnKeyListener { _, keyCode, event ->
+            if (!enabled || event.action != KeyEvent.ACTION_DOWN || event.repeatCount > 0) return@setOnKeyListener false
+            when (keyCode) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> { onLeft(); true }
+                KeyEvent.KEYCODE_DPAD_RIGHT -> { onRight(); true }
+                else -> false
+            }
+        }
+        view.requestFocus()
+        onDispose { view.setOnKeyListener(null) }
+    }
+}
 
 @Composable
 actual fun rememberBestNumberStore(): BestNumberStore {

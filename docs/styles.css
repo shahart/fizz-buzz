@@ -30,10 +30,14 @@ body {
   overscroll-behavior: none;
 }
 body[data-phase="game-over"] { background: var(--red); }
+body[data-phase="game-over"][data-outcome="winner"] { background: #16803d; animation: result-flash 2.4s ease-in-out 1; }
+body[data-phase="game-over"][data-outcome="spectator"] { background: #d39b00; animation: result-flash 2.4s ease-in-out 1; }
 body[data-phase="game-over"] .brand { color: white; }
 body[data-phase="game-over"] .top-chip { border-color: rgba(255,255,255,.25); color: white; background: rgba(255,255,255,.13); }
 body[data-phase="game-over"] .connection-dot { background: white; }
 body[data-phase="game-over"] .footer { color: rgba(255,255,255,.68); }
+body[data-outcome="spectator"] .brand, body[data-outcome="spectator"] .top-chip { color: #493600; }
+body[data-outcome="spectator"] .top-chip { border-color: rgba(73,54,0,.25); background: rgba(255,255,255,.45); }
 button { font: inherit; }
 button:focus-visible { outline: 3px solid #102a43; outline-offset: 4px; }
 .app-shell {
@@ -125,8 +129,26 @@ h1, h2, p { margin-top: 0; }
 @keyframes spin { to { transform: rotate(360deg); } }
 .loading-title { margin: 0; font-size: 23px; font-weight: 850; }
 .game-card.game-over-card { color: white; border-color: rgba(255,255,255,.25); background: var(--red); }
+.game-card.game-over-winner { color: #103b24; border-color: rgba(255,255,255,.8); background: #d9fbe5; }
+.game-card.game-over-spectator { color: #493600; border-color: rgba(255,255,255,.8); background: #fff3bd; }
+.game-card.game-over-winner .game-message, .game-card.game-over-winner .winner-line,
+.game-card.game-over-winner .keyboard-note, .game-card.game-over-winner .stats-row, .game-card.game-over-winner .latency,
+.game-card.game-over-spectator .game-message, .game-card.game-over-spectator .winner-line,
+.game-card.game-over-spectator .keyboard-note, .game-card.game-over-spectator .stats-row, .game-card.game-over-spectator .latency { color: inherit; }
+.game-card.game-over-winner .player-chip, .game-card.game-over-spectator .player-chip { color: inherit; border-color: currentColor; background: rgba(255,255,255,.55); }
+.game-card.game-over-winner .stats-row span, .game-card.game-over-spectator .stats-row span { background: rgba(16,42,67,.08); }
+.result-popup { margin: 14px auto 4px; padding: 13px 18px; border: 2px solid #16803d; border-radius: 18px; color: #103b24; background: white; box-shadow: 0 8px 28px rgba(16,42,67,.16); font-size: 17px; font-weight: 900; animation: popup-in .28s ease-out both; }
+.spectator-message { border-color: #bd8800; color: #493600; font-size: 13px; }
+@keyframes result-flash { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.35); } }
+@keyframes popup-in { from { opacity: 0; transform: translateY(-8px) scale(.96); } to { opacity: 1; transform: translateY(0) scale(1); } }
 .game-card.game-over-card .eyebrow, .game-card.game-over-card .field-caption { color: rgba(255,255,255,.72); }
-.game-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 26px; }
+.game-card.game-over-winner .eyebrow, .game-card.game-over-winner .field-caption,
+.game-card.game-over-spectator .eyebrow, .game-card.game-over-spectator .field-caption { color: inherit; }
+.game-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 26px; padding-top: 46px; }
+.player-corner { position: absolute; top: 17px; inset-inline-end: 20px; display: flex; gap: 8px; }
+.player-corner-item { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: #f5f9fd; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.player-corner-emoji { font-size: 17px; line-height: 1; }
+.game-card { position: relative; }
 .turn-label { margin: 0; font-size: 13px; font-weight: 900; }
 .player-chip { display: inline-flex; align-items: center; gap: 7px; min-height: 35px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--ink); background: #f5f9fd; font-size: 11px; font-weight: 800; cursor: pointer; }
 .game-over-card .player-chip { border-color: rgba(255,255,255,.3); color: white; background: rgba(255,255,255,.14); }
@@ -195,7 +217,7 @@ html[dir="rtl"] .turn-progress-fill { transform-origin: right center; }
   .stage { padding-block: 12px; }
   .game-card { padding: 21px; border-radius: 26px; }
   .join-card { padding-block: 24px; }
-  .game-topline { margin-bottom: 16px; }
+  .game-topline { margin-bottom: 16px; padding-top: 42px; }
   .number-orb { width: clamp(112px, 29vh, 150px); margin-bottom: 13px; }
   .answer-row { margin-top: 16px; }
   .answer-button { min-height: 57px; }
