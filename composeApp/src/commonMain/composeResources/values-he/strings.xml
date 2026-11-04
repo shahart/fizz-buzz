@@ -6,7 +6,7 @@
     <!--
     <string name="layout_direction">ltr</string>
     <string name="ready">READY?</string>
-    <string name="instructions">Say or tap the number — use BOOM 💣 for multiples of 7 and numbers containing 7</string>
+    <string name="instructions">Tap or say the number — use BOOM 💣 for multiples of 7 and numbers containing 7</string>
     <string name="speech_unavailable">Speech recognition is not available on this device — use the buttons to play</string>
     <string name="start_game">Start game</string>
     <string name="boom">BOOM 💣</string>
@@ -39,13 +39,15 @@
     <string name="ready">מוכנים?</string>
     <string name="choose_nickname">כינוי האימוג׳י שלך</string>
     <string name="choose_emoji">בחירת אימוג׳י</string>
-    <string name="instructions">אמרו או לחצו על המספר — השתמשו בבום 💣 עבור כפולות של 7 ומספרים שמכילים את הספרה 7</string>
+    <string name="emoji_already_chosen">מישהו אחר כבר בחר באימוג׳י הזה. נא לבחור אימוג׳י אחר.</string>
+    <string name="instructions">לחצו על המספר או אמרו אותו — השתמשו בבום 💣 עבור כפולות של 7 ומספרים שמכילים את הספרה 7</string>
     <string name="keyboard_hint">לחצו ← או → להפעלת הכפתור שבאותו הצד.</string>
     <string name="speech_unavailable">זיהוי דיבור אינו זמין במכשיר הזה — אפשר לשחק בעזרת הכפתורים</string>
     <string name="start_game">התחלת משחק</string>
     <string name="boom">💣 בום</string>
     <string name="time_is_up">הזמן נגמר</string>
     <string name="wrong_answer">תשובה שגויה</string>
+    <string name="voice_heard">נשמע: %1$s</string>
     <string name="someone_else_timed_out">לשחקן אחר נגמר הזמן</string>
     <string name="someone_else_wrong_answer">שחקן אחר נתן תשובה שגויה</string>
     <string name="seconds_remaining_listening">שניות נותרו • המיקרופון מאזין</string>
@@ -81,6 +83,8 @@
     <string name="feedback_contains_seven">הספרה 7 מופיעה ב־%1$d, לכן התשובה היא בום.</string>
     <string name="feedback_divisible_and_contains">%1$d מתחלק ב־7 וגם מכיל 7, לכן התשובה היא בום.</string>
     <string name="lowest_response_time">זמן התגובה הקצר ביותר: %1$s שניות</string>
+    <string name="mute_sound">השתקת מוזיקה</string>
+    <string name="unmute_sound">הפעלת מוזיקה</string>
     <string name="response_time_rank">דירוג זמן תגובה: %1$d מתוך %2$d</string>
     <string name="response_time_unranked">דירוג זמן תגובה: —</string>
     <string name="winner">המנצח:</string>

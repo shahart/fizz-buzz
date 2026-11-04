@@ -48,7 +48,10 @@ private external fun browserSpeechRecognitionSupported(): Boolean
         window.__countdownRecognitionActive = true;
         const recognition = new SpeechRecognition();
         window.__countdownRecognition = recognition;
-        recognition.lang = navigator.language || 'en-US';
+        const preferred = (navigator.language || 'en-US').toLowerCase().startsWith('he') ? 'he-IL' : 'en-US';
+        const alternate = preferred === 'he-IL' ? 'en-US' : 'he-IL';
+        window.__countdownSpeechLanguage = preferred;
+        recognition.lang = window.__countdownSpeechLanguage;
         recognition.continuous = false;
         recognition.interimResults = true;
         recognition.maxAlternatives = 1;
@@ -69,6 +72,8 @@ private external fun browserSpeechRecognitionSupported(): Boolean
         };
         recognition.onend = () => {
             if (window.__countdownRecognitionActive && !window.__countdownSpeechResult) {
+                window.__countdownSpeechLanguage = window.__countdownSpeechLanguage === preferred ? alternate : preferred;
+                recognition.lang = window.__countdownSpeechLanguage;
                 try { recognition.start(); } catch (_) {}
             }
         };

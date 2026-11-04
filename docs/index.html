@@ -4,12 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#eaf4ff">
-  <meta name="description" content="A quick global 7-Boom number game. Say or tap the number, or hit BOOM for sevens.">
-  <link rel="icon" type="image/svg+xml" href="./icon.svg">
+  <meta name="description" content="A quick global 7-Boom number game. Tap or say the number, or hit BOOM for sevens.">
+  <link rel="icon" type="image/png" href="./icon-new.png">
   <link rel="stylesheet" href="./styles.css">
-  <title>7-Boom 1.11</title>
+  <title>7-Boom 1.12</title>
 </head>
 <body>
+  <div id="splash-screen" class="splash-screen" role="status" aria-label="7-Boom">
+    <img src="./icon-new.png" alt="" class="splash-icon">
+  </div>
   <main id="app" class="app-shell" aria-live="polite"></main>
 
   <dialog id="nickname-dialog" class="dialog" aria-labelledby="nickname-title">
@@ -17,6 +20,7 @@
       <div><p class="eyebrow" data-copy="nicknameEyebrow"></p><h2 id="nickname-title" data-copy="chooseEmoji"></h2></div>
       <button class="icon-button" type="button" data-action="close-nickname" data-label="close" aria-label="Close">×</button>
     </div>
+    <p id="emoji-error" class="dialog-error" role="alert" hidden></p>
     <div id="emoji-grid" class="emoji-grid"></div>
   </dialog>
 
@@ -46,6 +50,12 @@
   </dialog>
 
   <script src="./firebase-config.js"></script>
+  <script>
+    window.setTimeout(() => {
+      const splash = document.getElementById("splash-screen");
+      if (splash) splash.remove();
+    }, 1000);
+  </script>
   <script type="module" src="./build/src/app.js"></script>
 </body>
 </html>

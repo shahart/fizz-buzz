@@ -66,6 +66,7 @@ import fizz_buzz.composeapp.generated.resources.average_response_time
 import fizz_buzz.composeapp.generated.resources.answer_with_number
 import fizz_buzz.composeapp.generated.resources.boom
 import fizz_buzz.composeapp.generated.resources.choose_emoji
+import fizz_buzz.composeapp.generated.resources.emoji_already_chosen
 import fizz_buzz.composeapp.generated.resources.choose_nickname
 import fizz_buzz.composeapp.generated.resources.choose_theme
 import fizz_buzz.composeapp.generated.resources.connected_players
@@ -102,6 +103,7 @@ import fizz_buzz.composeapp.generated.resources.you_won
 import fizz_buzz.composeapp.generated.resources.you_won_message
 import fizz_buzz.composeapp.generated.resources.spectator_message
 import fizz_buzz.composeapp.generated.resources.wrong_answer
+import fizz_buzz.composeapp.generated.resources.voice_heard
 import fizz_buzz.composeapp.generated.resources.you
 import fizz_buzz.composeapp.generated.resources.feedback_divisible_and_contains
 import fizz_buzz.composeapp.generated.resources.feedback_divisible_by_seven
@@ -113,7 +115,10 @@ import fizz_buzz.composeapp.generated.resources.theme_sunset
 import fizz_buzz.composeapp.generated.resources.theme_midnight
 import fizz_buzz.composeapp.generated.resources.theme_locked
 import fizz_buzz.composeapp.generated.resources.your_turn
+import fizz_buzz.composeapp.generated.resources.mute_sound
+import fizz_buzz.composeapp.generated.resources.unmute_sound
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.awaitCancellation
 import org.jetbrains.compose.resources.Font
 import org.jetbrains.compose.resources.stringResource
 
@@ -121,8 +126,10 @@ private val Navy = Color(0xFF102A43)
 private val Sky = Color(0xFFEAF4FF)
 private val Blue = Color(0xFF1473E6)
 private val Red = Color(0xFFD92D20)
-private val AnswerGreen = Color(0xFF16803D)
-private val WinGreen = Color(0xFF16803D)
+// Turquoise
+private val Turquoise = Color(0xFF2DA095)
+// Bordeaux
+private val Bordeaux = Color(0xFFA44968)
 private val SpectatorYellow = Color(0xFFD39B00)
 private data class GamePalette(val navy: Color, val sky: Color, val blue: Color, val red: Color)
 private val Palettes = mapOf(
@@ -174,11 +181,21 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
     val scope = rememberCoroutineScope()
     val bestNumberStore = rememberBestNumberStore()
     var selectedTheme by remember(bestNumberStore) { mutableStateOf(bestNumberStore.loadTheme().takeIf(Palettes::containsKey) ?: "classic") }
+    var soundMuted by remember(bestNumberStore) { mutableStateOf(bestNumberStore.loadSoundMuted()) }
+    val toggleSound = {
+        soundMuted = !soundMuted
+        bestNumberStore.saveSoundMuted(soundMuted)
+        if (soundMuted) {
+            stopFailureSound()
+            stopWinnerSound()
+        }
+    }
     var showThemePicker by remember { mutableStateOf(false) }
     var nickname by remember(bestNumberStore) {
         mutableStateOf(bestNumberStore.loadNickname()?.takeIf(::isEmojiNickname))
     }
     var showNicknamePicker by remember { mutableStateOf(nickname == null) }
+    var duplicateNickname by remember { mutableStateOf(false) }
     var showRoster by remember { mutableStateOf(false) }
     var showWinnerDialog by remember { mutableStateOf(false) }
     val session = remember(bestNumberStore, nickname, sessionFactory) {
@@ -200,6 +217,7 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
     val activeTurn = uiState.isActiveTurn(session.sessionId)
     val numberAction = remember(session, snapshot?.turnId, snapshot?.number, uiState.connectionStatus) {
         {
+            stopCountdownMusic()
             lastHeard = null
             snapshot?.let { current -> current.turnId?.let { session.submitNumber(it, current.number) } }
             Unit
@@ -207,6 +225,7 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
     }
     val boomAction = remember(session, snapshot?.turnId, uiState.connectionStatus) {
         {
+            stopCountdownMusic()
             lastHeard = null
             snapshot?.turnId?.let(session::submitBoom)
             Unit
@@ -221,6 +240,12 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
             ConnectionStatus.CONNECTED -> logGameEvent("game_connected", "mode=online")
             ConnectionStatus.SOLO -> logGameEvent("game_connected", "mode=solo")
             else -> Unit
+        }
+    }
+    LaunchedEffect(uiState.nicknameTaken) {
+        if (uiState.nicknameTaken) {
+            showNicknamePicker = true
+            duplicateNickname = true
         }
     }
     LaunchedEffect(snapshot?.revision, snapshot?.phase) {
@@ -245,11 +270,25 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
     DisposableEffect(session) { onDispose(session::close) }
     ObserveGameLifecycle(
         onStopped = {
+            stopCountdownMusic()
             speech.stopListening()
             session.leaveForFocusLoss()
         },
         onResumed = {},
     )
+
+    LaunchedEffect(snapshot?.phase, snapshot?.turnId, snapshot?.activeSessionId, soundMuted) {
+        if (snapshot?.phase == GamePhase.ACTIVE && !soundMuted) {
+            playCountdownMusic(snapshot.activeSessionId == session.sessionId)
+        } else {
+            stopCountdownMusic()
+        }
+        try {
+            awaitCancellation()
+        } finally {
+            stopCountdownMusic()
+        }
+    }
 
     LaunchedEffect(snapshot?.deadline, uiState.serverClockOffsetMillis) {
         while (snapshot?.phase == GamePhase.ACTIVE) {
@@ -269,12 +308,14 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
                 delay(100)
                 speech.consumePartialTranscript()?.let { partial ->
                     if (partial.matchesAnswerFor(snapshot.number)) {
+                        stopCountdownMusic()
                         lastHeard = partial
                         session.submitRecognition(turnId, listOf(partial))
                         return@LaunchedEffect
                     }
                 }
                 val alternatives = speech.consumeResults() ?: continue
+                stopCountdownMusic()
                 lastHeard = alternatives.firstOrNull()
                 session.submitRecognition(turnId, alternatives)
                 return@LaunchedEffect
@@ -291,7 +332,13 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
             snapshot.gameOverReason != GameOverReason.NO_PLAYERS
         ) {
             soundedRevision = snapshot.revision
-            playTimeoutSound()
+            if (!soundMuted) {
+                when (snapshot.resultFor(session.sessionId)) {
+                    GameResult.LOSER -> playFailureSound()
+                    GameResult.WINNER -> playWinnerSound()
+                    else -> Unit
+                }
+            }
         }
     }
 
@@ -324,12 +371,12 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
     val gameResult = snapshot?.resultFor(session.sessionId) ?: GameResult.NONE
     val palette = Palettes.getValue(selectedTheme)
     val background = when {
-        failed && failureBlinking && gameResult == GameResult.WINNER -> WinGreen.copy(alpha = failureFlashAlpha.value)
+        failed && failureBlinking && gameResult == GameResult.WINNER -> Turquoise.copy(alpha = failureFlashAlpha.value)
         failed && failureBlinking && gameResult == GameResult.SPECTATOR -> SpectatorYellow.copy(alpha = failureFlashAlpha.value)
-        failed && failureBlinking -> palette.red.copy(alpha = failureFlashAlpha.value)
-        failed && gameResult == GameResult.WINNER -> WinGreen
+        failed && failureBlinking -> Bordeaux.copy(alpha = failureFlashAlpha.value)
+        failed && gameResult == GameResult.WINNER -> Turquoise
         failed && gameResult == GameResult.SPECTATOR -> SpectatorYellow
-        failed -> palette.red
+        failed -> Bordeaux
         else -> palette.sky
     }
     CompositionLocalProvider(LocalPalette provides palette) {
@@ -354,11 +401,13 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
                             nickname = nickname,
                             compact = compact,
                             onChooseNickname = { showNicknamePicker = true },
-                            onJoin = { logGameEvent("join_started"); prepareTimeoutSound(); lastHeard = null; session.join() },
+                            onJoin = { logGameEvent("join_started"); prepareFailureSound(); prepareWinnerSound(); lastHeard = null; session.join() },
                             bestNumber = uiState.bestNumber,
                             lowestResponseTime = uiState.lowestResponseTimeText(),
                             selectedTheme = selectedTheme,
                             onShowThemes = { showThemePicker = true },
+                            soundMuted = soundMuted,
+                            onToggleSound = toggleSound,
                         )
                         ConnectionStatus.JOINING -> StatusText(stringResource(Res.string.joining))
                         ConnectionStatus.RECONNECTING -> StatusText(stringResource(Res.string.reconnecting))
@@ -379,6 +428,8 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
                             onNumber = numberAction,
                             onRestart = { logGameEvent("restart_requested"); session.restart() },
                             onShowRoster = { showRoster = true },
+                            soundMuted = soundMuted,
+                            onToggleSound = toggleSound,
                             compact = compact,
                         )
                     }
@@ -391,12 +442,18 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
             EmojiNicknamePicker(
                 selected = nickname,
                 onSelect = { selected ->
-                    bestNumberStore.saveNickname(selected)
-                    nickname = selected
-                    showNicknamePicker = false
+                    if (uiState.roster.isNicknameTakenByOther(session.sessionId, selected)) {
+                        duplicateNickname = true
+                    } else {
+                        duplicateNickname = false
+                        bestNumberStore.saveNickname(selected)
+                        nickname = selected
+                        showNicknamePicker = false
+                    }
                 },
                 onDismiss = { if (nickname != null) showNicknamePicker = false },
                 compact = compact,
+                duplicateChoice = duplicateNickname,
             )
         }
         if (showWinnerDialog) {
@@ -498,8 +555,13 @@ private fun JoinPanel(
     lowestResponseTime: String,
     selectedTheme: String,
     onShowThemes: () -> Unit,
+    soundMuted: Boolean,
+    onToggleSound: () -> Unit,
 ) {
     val palette = LocalPalette.current
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        SoundToggleButton(soundMuted, onToggleSound, compact)
+    }
     Text(stringResource(Res.string.ready), color = palette.navy, fontSize = if (compact) 24.sp else 32.sp, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(if (compact) 6.dp else 16.dp))
     Text(stringResource(Res.string.choose_nickname), color = palette.navy.copy(alpha = .7f), fontSize = if (compact) 12.sp else 15.sp)
@@ -519,7 +581,11 @@ private fun JoinPanel(
         platformSupportedText(
             if (speechSupported) stringResource(Res.string.instructions) else stringResource(Res.string.speech_unavailable),
         ),
-        color = palette.navy.copy(alpha = 0.7f), fontSize = if (compact) 12.sp else 16.sp, textAlign = TextAlign.Center,
+        modifier = Modifier.testTag("lobby-instructions"),
+        color = palette.navy.copy(alpha = 0.7f),
+        fontSize = if (compact) 15.sp else 18.sp,
+        fontWeight = FontWeight.Bold,
+        textAlign = TextAlign.Center,
     )
     Spacer(Modifier.height(if (compact) 10.dp else 32.dp))
     Button(
@@ -533,7 +599,7 @@ private fun JoinPanel(
 }
 
 @Composable
-private fun EmojiNicknamePicker(selected: String?, onSelect: (String) -> Unit, onDismiss: () -> Unit, compact: Boolean) {
+private fun EmojiNicknamePicker(selected: String?, onSelect: (String) -> Unit, onDismiss: () -> Unit, compact: Boolean, duplicateChoice: Boolean) {
     val palette = LocalPalette.current
     AlertDialog(
         modifier = Modifier.testTag("nickname-picker"),
@@ -548,19 +614,24 @@ private fun EmojiNicknamePicker(selected: String?, onSelect: (String) -> Unit, o
                 },
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                if (duplicateChoice) {
+                    Text(stringResource(Res.string.emoji_already_chosen), color = palette.red)
+                }
                 EMOJI_NICKNAMES.chunked(if (compact) 4 else 6).forEach { emojis ->
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                        emojis.forEach { emoji ->
-                            TextButton(
-                                onClick = { onSelect(emoji) },
-                                modifier = Modifier.size(if (compact) 40.dp else 48.dp).testTag("nickname-choice-$emoji"),
-                                shape = CircleShape,
-                                contentPadding = PaddingValues(0.dp),
-                                colors = ButtonDefaults.textButtonColors(
-                                    containerColor = if (emoji == selected) palette.blue.copy(alpha = .15f) else Color.Transparent,
-                                ),
-                            ) {
-                                EmojiNicknameSymbol(emoji, fontSize = if (compact) 20.sp else 22.sp)
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                            emojis.forEach { emoji ->
+                                TextButton(
+                                    onClick = { onSelect(emoji) },
+                                    modifier = Modifier.size(if (compact) 40.dp else 48.dp).testTag("nickname-choice-$emoji"),
+                                    shape = CircleShape,
+                                    contentPadding = PaddingValues(0.dp),
+                                    colors = ButtonDefaults.textButtonColors(
+                                        containerColor = if (emoji == selected) palette.blue.copy(alpha = .15f) else Color.Transparent,
+                                    ),
+                                ) {
+                                    EmojiNicknameSymbol(emoji, fontSize = if (compact) 20.sp else 22.sp)
+                                }
                             }
                         }
                     }
@@ -670,6 +741,8 @@ private fun GamePanel(
     onNumber: () -> Unit,
     onRestart: () -> Unit,
     onShowRoster: () -> Unit,
+    soundMuted: Boolean,
+    onToggleSound: () -> Unit,
     compact: Boolean,
 ) {
     val palette = LocalPalette.current
@@ -678,6 +751,9 @@ private fun GamePanel(
     val yourEmoji = nickname
     val gameResult = snapshot.resultFor(sessionId)
     val gameOverTextColor = if (gameResult == GameResult.LOSER || gameResult == GameResult.NONE) Color.White else Color(0xFF103B24)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+        SoundToggleButton(soundMuted, onToggleSound, compact)
+    }
     if (!failed) {
         PlayerIndicators(
             connectedPlayers = snapshot.connectedPlayers,
@@ -815,9 +891,9 @@ private fun GamePanel(
             )
         }
     }
-    if (activeTurn && lastHeard != null) {
+    if ((activeTurn || (failed && snapshot.gameOverReason == GameOverReason.WRONG_ANSWER && !snapshot.failedByAnotherPlayer(sessionId))) && lastHeard != null) {
         Spacer(Modifier.height(12.dp))
-        Text(lastHeard, color = palette.navy, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+        Text(stringResource(Res.string.voice_heard, lastHeard), color = if (failed) gameOverTextColor else palette.navy, fontSize = 18.sp, fontWeight = FontWeight.Bold)
     }
     if (failed) {
         Spacer(Modifier.height(if (compact) 10.dp else 30.dp))
@@ -876,6 +952,20 @@ private fun GamePanel(
 }
 
 @Composable
+private fun SoundToggleButton(soundMuted: Boolean, onToggle: () -> Unit, compact: Boolean) {
+    TextButton(
+        onClick = onToggle,
+        modifier = Modifier.testTag(if (soundMuted) "sound-toggle-muted" else "sound-toggle-enabled"),
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+    ) {
+        Text(
+            text = if (soundMuted) "🔇  ${stringResource(Res.string.unmute_sound)}" else "🔊  ${stringResource(Res.string.mute_sound)}",
+            fontSize = if (compact) 11.sp else 13.sp,
+        )
+    }
+}
+
+@Composable
 internal fun PlayerIndicators(
     connectedPlayers: Int,
     currentPlayerEmoji: String,
@@ -922,12 +1012,12 @@ private fun AnswerButtons(enabled: Boolean, onBoom: () -> Unit, onNumber: () -> 
     ) {
         Button(
             onClick = onBoom, enabled = enabled, modifier = Modifier.weight(1f).height(if (compact) 44.dp else 64.dp),
-            shape = RoundedCornerShape(if (compact) 26.dp else 18.dp), colors = ButtonDefaults.buttonColors(containerColor = palette.red),
+            shape = RoundedCornerShape(if (compact) 26.dp else 18.dp), colors = ButtonDefaults.buttonColors(containerColor = Bordeaux),
         ) { BombSymbol(Modifier.size(if (compact) 28.dp else 36.dp), fontSize = if (compact) 24.sp else 30.sp) }
         Button(
             onClick = onNumber, enabled = enabled, modifier = Modifier.weight(1f).height(if (compact) 44.dp else 64.dp)
                 .semantics { contentDescription = numberAnswerDescription },
-            shape = RoundedCornerShape(if (compact) 26.dp else 18.dp), colors = ButtonDefaults.buttonColors(containerColor = AnswerGreen, contentColor = Color.White),
+            shape = RoundedCornerShape(if (compact) 26.dp else 18.dp), colors = ButtonDefaults.buttonColors(containerColor = Turquoise, contentColor = Color.White),
         ) { }
     }
 }

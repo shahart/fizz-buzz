@@ -8,7 +8,7 @@ const ENGLISH_NUMBERS = Object.freeze({
   zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
   ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
   seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50,
-  sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100,
+  sixty: 60, seventy: 70, eighty: 80, ninety: 90, hundred: 100, thousand: 1_000, million: 1_000_000, billion: 1_000_000_000,
 });
 
 const HEBREW_NUMBERS = Object.freeze({
@@ -17,7 +17,10 @@ const HEBREW_NUMBERS = Object.freeze({
   "שש": 6, "שישה": 6, "שבע": 7, "שבעה": 7, "שמונה": 8, "תשע": 9, "תשעה": 9,
   "עשר": 10, "עשרה": 10, "אחד עשר": 11, "אחת עשרה": 11, "עשרים": 20,
   "שלושים": 30, "ארבעים": 40, "חמישים": 50, "שישים": 60, "שבעים": 70,
-  "שמונים": 80, "תשעים": 90, "מאה": 100,
+  "שמונים": 80, "תשעים": 90, "מאה": 100, "מאתיים": 200, "שלוש מאות": 300, "ארבע מאות": 400, "חמש מאות": 500,
+  "שש מאות": 600, "שבע מאות": 700, "שמונה מאות": 800, "תשע מאות": 900,
+  "אלף": 1_000, "אלפיים": 2_000, "שלושת אלפים": 3_000, "ארבעת אלפים": 4_000, "חמשת אלפים": 5_000,
+  "ששת אלפים": 6_000, "שבעת אלפים": 7_000, "שמונת אלפים": 8_000, "תשעת אלפים": 9_000, "מיליון": 1_000_000, "מיליארד": 1_000_000_000,
 });
 
 export function isBoom(number) {

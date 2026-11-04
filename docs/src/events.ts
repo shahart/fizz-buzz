@@ -1,10 +1,16 @@
 export function bindUiEvents(d: Record<string, any>) {
-  const { byId, storageSet, render, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew } = d;
+  const { byId, storageSet, render, syncSoundMute, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew, t, sessionId } = d;
   document.addEventListener("click", (event) => {
     const button = (event.target as Element).closest<HTMLElement>("[data-action]");
     if (!button) return;
     switch (button.dataset.action) {
       case "join": startOnline(); break;
+      case "toggle-mute":
+        state.soundMuted = !state.soundMuted;
+        storageSet("seven-boom-sound-muted", state.soundMuted);
+        syncSoundMute();
+        render();
+        break;
       case "open-nickname": showNicknamePicker(); break;
       case "open-theme": showThemePicker(); break;
       case "open-roster": openRoster(); break;
@@ -20,6 +26,15 @@ export function bindUiEvents(d: Record<string, any>) {
   byId("emoji-grid").addEventListener("click", (event) => {
     const choice = (event.target as Element).closest<HTMLElement>("[data-emoji]");
     if (!choice) return;
+    const duplicate = state.roster.some((player) => player.sessionId !== sessionId && player.nickname === choice.dataset.emoji);
+    if (duplicate) {
+      state.nicknameError = t("emojiAlreadyChosen");
+      byId("emoji-error").textContent = state.nicknameError;
+      byId("emoji-error").hidden = false;
+      return;
+    }
+    state.nicknameError = null;
+    byId("emoji-error").hidden = true;
     state.nickname = choice.dataset.emoji;
     storageSet("seven-boom-nickname-emoji", state.nickname);
     closeDialog(nicknameDialog);

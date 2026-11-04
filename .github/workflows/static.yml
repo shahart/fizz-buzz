@@ -39,22 +39,18 @@ jobs:
       - name: Set up Pages
         uses: actions/configure-pages@v5
 
-      - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: pnpm
+          cache: npm
+          cache-dependency-path: docs/package-lock.json
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci --prefix docs
 
       - name: Build TypeScript web client
-        run: pnpm --filter seven-boom-web-tests run build
+        run: npm --prefix docs run build
 
       - name: Upload web client artifact
         uses: actions/upload-pages-artifact@v3

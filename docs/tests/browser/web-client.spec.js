@@ -1,5 +1,55 @@
 import { expect, test } from "@playwright/test";
 
+test("shows the icon splash before the initial lobby", async ({ page }) => {
+  await page.addInitScript(() => {
+    const originalSetTimeout = window.setTimeout.bind(window);
+    window.__splashTimeoutCallback = null;
+    window.setTimeout = (callback, delay, ...args) => {
+      if (delay === 1000) {
+        window.__splashTimeoutCallback = callback;
+        return 0;
+      }
+      return originalSetTimeout(callback, delay, ...args);
+    };
+  });
+  await page.goto("/");
+  await expect(page.locator("#splash-screen img")).toHaveAttribute("src", "./icon-new.png");
+  await expect(page.getByRole("button", { name: /Join game|הצטרפות למשחק/ })).toBeVisible();
+  await page.evaluate(() => window.__splashTimeoutCallback());
+  await expect(page.locator("#splash-screen")).toHaveCount(0);
+});
+
+test("lobby instructions are prominent and fit in the Hebrew mobile layout", async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 740 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "language", { configurable: true, get: () => "he-IL" });
+  });
+  await page.goto("/");
+
+  const instructions = page.locator(".instructions");
+  await expect(instructions).toBeVisible();
+  await expect(instructions).toHaveCSS("font-size", "16px");
+  await expect(instructions).toHaveCSS("font-weight", "800");
+  const fits = await instructions.evaluate((element) => element.scrollWidth <= element.clientWidth);
+  expect(fits).toBe(true);
+});
+
+test("hl query parameter forces the web game language", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "language", { configurable: true, get: () => "he-IL" });
+  });
+
+  await page.goto("/?hl=en");
+  await expect(page.locator("html")).toHaveAttribute("lang", "en");
+  await expect(page.locator("html")).toHaveAttribute("dir", "ltr");
+  await expect(page.getByRole("button", { name: "Join game" })).toBeVisible();
+
+  await page.goto("/?hl=he");
+  await expect(page.locator("html")).toHaveAttribute("lang", "he");
+  await expect(page.locator("html")).toHaveAttribute("dir", "rtl");
+  await expect(page.getByRole("button", { name: "הצטרפות למשחק" })).toBeVisible();
+});
+
 async function installWebSocketMock(page, language = "en-US") {
   await page.addInitScript(() => {
     class MockWebSocket {
@@ -194,6 +244,53 @@ test("nickname and theme dialogs update the rendered lobby and persist preferenc
   await page.locator('#theme-options [data-theme="classic"]').click();
   await expect(page.locator("#theme-dialog")).toBeHidden();
   expect(await page.evaluate(() => localStorage.getItem("seven-boom-theme"))).toBe("classic");
+});
+
+test("nickname picker rejects an emoji already used by another roster player", async ({ page }) => {
+  const { sessionId } = await connectWithRoster(page);
+  await page.evaluate(() => {
+    const dialog = document.querySelector("#nickname-dialog");
+    document.querySelector("#emoji-grid").innerHTML = '<button type="button" data-emoji="🦊">🦊</button><button type="button" data-emoji="🐼">🐼</button>';
+    dialog.showModal();
+  });
+
+  await page.locator('#emoji-grid [data-emoji="🦊"]').click();
+  await expect(page.locator("#emoji-error")).toBeVisible();
+  await expect(page.locator("#emoji-error")).toContainText("Someone else has already chosen this emoji");
+  await expect(page.locator("#nickname-dialog")).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem("seven-boom-nickname-emoji"))).toBeNull();
+
+  await page.locator('#emoji-grid [data-emoji="🐼"]').click();
+  await expect(page.locator("#nickname-dialog")).toBeHidden();
+  expect(await page.evaluate(() => localStorage.getItem("seven-boom-nickname-emoji"))).toBe("🐼");
+  expect(sessionId).toBeTruthy();
+});
+
+test("server duplicate rejection returns the user to the picker to choose again", async ({ page }) => {
+  await installWebSocketMock(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: /Join game/ }).click();
+  await expect.poll(() => page.evaluate(() => window.__mockSockets.length)).toBe(1);
+  await page.evaluate(() => {
+    const socket = window.__mockSockets[0];
+    socket.emit("open");
+    socket.emit("message", { data: JSON.stringify({ type: "error", code: "nicknameTaken" }) });
+  });
+  await expect(page.locator("#nickname-dialog")).toBeVisible();
+  await expect(page.locator("#emoji-error")).toContainText("Someone else has already chosen this emoji");
+
+  await page.locator('#emoji-grid [data-emoji="🦊"]').click();
+  await expect(page.locator("#nickname-dialog")).toBeHidden();
+  await page.getByRole("button", { name: /Join game/ }).click();
+  await expect.poll(() => page.evaluate(() => window.__mockSockets.length)).toBe(2);
+  expect(await page.evaluate(() => new URL(window.__mockSockets[1].url).searchParams.get("nickname"))).toBe("🦊");
+});
+
+test("emoji order stays left to right in Hebrew", async ({ page }) => {
+  await installWebSocketMock(page, "he-IL");
+  await page.goto("/");
+  await page.getByRole("button", { name: /בחירת אימוג׳י/ }).click();
+  await expect(page.locator("#emoji-grid")).toHaveCSS("direction", "ltr");
 });
 
 test("player roster dialog reflects roster updates and answer controls emit the protocol message", async ({ page }) => {

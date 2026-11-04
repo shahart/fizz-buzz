@@ -4,51 +4,120 @@ import kotlin.JsFun
 import kotlin.js.ExperimentalWasmJsInterop
 
 @OptIn(ExperimentalWasmJsInterop::class)
-actual fun playTimeoutSound() {
-    playBrowserTone()
+actual fun playFailureSound() {
+    playBrowserFailureSound()
 }
 
 @OptIn(ExperimentalWasmJsInterop::class)
-actual fun prepareTimeoutSound() {
-    prepareBrowserAudio()
+actual fun stopFailureSound() {
+    stopBrowserFailureSound()
+}
+
+@OptIn(ExperimentalWasmJsInterop::class)
+actual fun prepareFailureSound() {
+    prepareBrowserFailureSound()
+}
+
+@OptIn(ExperimentalWasmJsInterop::class)
+actual fun playWinnerSound() {
+    playBrowserWinnerSound()
+}
+
+@OptIn(ExperimentalWasmJsInterop::class)
+actual fun stopWinnerSound() {
+    stopBrowserWinnerSound()
+}
+
+@OptIn(ExperimentalWasmJsInterop::class)
+actual fun prepareWinnerSound() {
+    prepareBrowserWinnerSound()
+}
+
+@OptIn(ExperimentalWasmJsInterop::class)
+actual fun playCountdownMusic(isCurrentPlayerTurn: Boolean) {
+    playBrowserCountdownMusic(isCurrentPlayerTurn)
+}
+
+@OptIn(ExperimentalWasmJsInterop::class)
+actual fun stopCountdownMusic() {
+    stopBrowserCountdownMusic()
 }
 
 actual val requiresUserSoundActivation: Boolean = true
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun(
-    """() => {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const context = window.__countdownAudioContext || new AudioContext();
-        window.__countdownAudioContext = context;
-        if (context.state === 'suspended') context.resume();
+    """isCurrentPlayerTurn => {
+        const audio = window.__countdownMusic || new Audio('./cyberwave-orchestra-cinematic-tension-suspenseful-thriller-music-loop-297627.mp3');
+        window.__countdownMusic = audio;
+        audio.loop = true;
+        audio.volume = isCurrentPlayerTurn ? 0.05 : 0.05;
+        audio.play().catch(() => {});
     }""",
 )
-private external fun prepareBrowserAudio()
+private external fun playBrowserCountdownMusic(isCurrentPlayerTurn: Boolean)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun(
     """() => {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        const context = window.__countdownAudioContext || new AudioContext();
-        window.__countdownAudioContext = context;
-        const play = () => {
-            const oscillator = context.createOscillator();
-            const gain = context.createGain();
-            oscillator.type = 'sine';
-            oscillator.frequency.value = 880;
-            gain.gain.setValueAtTime(0.25, context.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.7);
-            oscillator.connect(gain);
-            gain.connect(context.destination);
-            oscillator.start();
-            oscillator.stop(context.currentTime + 0.7);
-        };
-        if (context.state === 'suspended') {
-            context.resume().then(play);
-        } else {
-            play();
-        }
+        const audio = window.__countdownMusic;
+        if (audio) audio.pause();
     }""",
 )
-private external fun playBrowserTone()
+private external fun stopBrowserCountdownMusic()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun(
+    """() => {
+        const audio = window.__failureSound || new Audio('./wrong-buzzer-6268.mp3');
+        window.__failureSound = audio;
+        const attempt = audio.play();
+        audio.pause();
+        if (attempt) attempt.catch(() => {});
+    }""",
+)
+private external fun prepareBrowserFailureSound()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun(
+    """() => {
+        const audio = window.__failureSound || new Audio('./wrong-buzzer-6268.mp3');
+        window.__failureSound = audio;
+        audio.currentTime = 0;
+        audio.volume = 0.4;
+        audio.play().catch(() => {});
+    }""",
+)
+private external fun playBrowserFailureSound()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""() => { const audio = window.__failureSound; if (audio) { audio.pause(); audio.currentTime = 0; } }""")
+private external fun stopBrowserFailureSound()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun(
+    """() => {
+        const audio = window.__winnerSound || new Audio('./u_o8xh7gwsrj-cute_happy_victory-476376.mp3');
+        window.__winnerSound = audio;
+        const attempt = audio.play();
+        audio.pause();
+        if (attempt) attempt.catch(() => {});
+    }""",
+)
+private external fun prepareBrowserWinnerSound()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun(
+    """() => {
+        const audio = window.__winnerSound || new Audio('./u_o8xh7gwsrj-cute_happy_victory-476376.mp3');
+        window.__winnerSound = audio;
+        audio.currentTime = 0;
+        audio.volume = 0.4;
+        audio.play().catch(() => {});
+    }""",
+)
+private external fun playBrowserWinnerSound()
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""() => { const audio = window.__winnerSound; if (audio) { audio.pause(); audio.currentTime = 0; } }""")
+private external fun stopBrowserWinnerSound()

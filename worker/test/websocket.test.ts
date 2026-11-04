@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const A = "00000000-0000-4000-8000-000000000001";
 const B = "00000000-0000-4000-8000-000000000002";
+const C = "00000000-0000-4000-8000-000000000003";
 
 async function connect(sessionId: string, nickname = "😀", timeZone = ""): Promise<WebSocket> {
   const response = await exports.default.fetch(
@@ -122,32 +123,34 @@ describe("WebSocket integration", () => {
     b.close();
   });
 
-  it("updates roster nicknames and disconnects while preserving duplicate emoji entries", async () => {
+  it("rejects duplicate nicknames and allows an existing player to change theirs", async () => {
     const a = await connect(A, "🚀");
     await nextUpdate(a);
-    const aJoinUpdate = nextUpdate(a);
-    const b = await connect(B, "🚀");
-    const [, bInitial] = await Promise.all([aJoinUpdate, nextUpdate(b)]);
-    expect(bInitial.roster.players).toEqual([
-      { sessionId: A, nickname: "🚀" },
-      { sessionId: B, nickname: "🚀" },
-    ]);
+    const observerUpdate = nextUpdate(a);
+    const observer = await connect(B, "🐼");
+    const observerInitial = nextUpdate(observer);
+    const [, observerJoined] = await Promise.all([observerUpdate, observerInitial]);
+    expect(observerJoined.roster.players).toHaveLength(2);
 
-    const bNicknameUpdate = nextUpdate(b);
+    const duplicate = await connect(C, "🚀");
+    await expect(nextMessage(duplicate)).resolves.toEqual({ type: "error", code: "nicknameTaken" });
+
+    const observerNicknameUpdate = nextUpdate(observer);
     const replacement = await connect(A, "🦄");
-    const [seenByB, seenByReplacement] = await Promise.all([bNicknameUpdate, nextUpdate(replacement)]);
-    expect(seenByB.roster.players).toEqual([
+    const [seenByObserver, seenByReplacement] = await Promise.all([observerNicknameUpdate, nextUpdate(replacement)]);
+    expect(seenByObserver.roster.players).toEqual([
       { sessionId: A, nickname: "🦄" },
-      { sessionId: B, nickname: "🚀" },
+      { sessionId: B, nickname: "🐼" },
     ]);
-    expect(seenByReplacement.roster.players).toEqual(seenByB.roster.players);
+    expect(seenByReplacement.roster.players).toEqual(seenByObserver.roster.players);
 
-    const afterDisconnect = nextUpdate(b);
+    const afterDisconnect = nextUpdate(observer);
     replacement.close();
     await expect(afterDisconnect).resolves.toMatchObject({
-      roster: { players: [{ sessionId: B, nickname: "🚀" }] },
+      roster: { players: [{ sessionId: B, nickname: "🐼" }] },
     });
-    b.close();
+    duplicate.close();
+    observer.close();
   });
 
   it("rejects free-text nicknames", async () => {

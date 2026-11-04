@@ -69,10 +69,16 @@ data class GameRoster(
 fun GameRoster?.nicknameFor(sessionId: String?): String? =
     sessionId?.let { id -> this?.players?.firstOrNull { it.sessionId == id }?.nickname }
 
+fun GameRoster?.isNicknameTakenByOther(sessionId: String, nickname: String): Boolean =
+    this?.players?.any { it.sessionId != sessionId && it.nickname == nickname } == true
+
 fun GameSnapshot.hasMultiplePlayers(): Boolean = connectedPlayers > 1
 
 @Serializable
 data class PongMessage(val type: String, val id: String)
+
+@Serializable
+data class ServerErrorMessage(val type: String, val code: String)
 
 fun GameSnapshot.failedByAnotherPlayer(sessionId: String): Boolean =
     failedSessionId != null && failedSessionId != sessionId
@@ -124,6 +130,7 @@ data class GameUiState(
     val latencyMillis: Long? = null,
     val bestNumber: Int = 0,
     val lowestResponseTimeMillis: Long = 0,
+    val nicknameTaken: Boolean = false,
 ) {
     fun isActiveTurn(sessionId: String): Boolean =
         connectionStatus in setOf(ConnectionStatus.CONNECTED, ConnectionStatus.SOLO) &&

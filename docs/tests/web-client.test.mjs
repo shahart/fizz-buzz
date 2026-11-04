@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import test from "node:test";
 import {
   EMOJIS,
@@ -18,6 +19,85 @@ import {
 test("the emoji nickname list is unique and matches the expected roster size", () => {
   assert.equal(EMOJIS.length, 24);
   assert.equal(new Set(EMOJIS).size, EMOJIS.length);
+});
+
+test("countdown music is available to the web and Android clients", async () => {
+  const track = "cyberwave-orchestra-cinematic-tension-suspenseful-thriller-music-loop-297627.mp3";
+  const webSource = await readFile(new URL("../src/app.ts", import.meta.url), "utf8");
+  const androidSource = await readFile(new URL("../../composeApp/src/androidMain/kotlin/com/shahartal/fizzbuzz/Sound.android.kt", import.meta.url), "utf8");
+  const wasmSource = await readFile(new URL("../../composeApp/src/wasmJsMain/kotlin/com/shahartal/fizzbuzz/Sound.wasmJs.kt", import.meta.url), "utf8");
+  const commonAppSource = await readFile(new URL("../../composeApp/src/commonMain/kotlin/com/shahartal/fizzbuzz/App.kt", import.meta.url), "utf8");
+
+  assert.equal(existsSync(new URL("../" + track, import.meta.url)), true);
+  assert.match(webSource, new RegExp(track));
+  assert.match(webSource, /snapshot\.activeSessionId === sessionId/);
+  assert.match(androidSource, /R\.raw\.countdown_music/);
+  assert.equal(existsSync(new URL("../../composeApp/src/androidMain/res/raw/countdown_music.mp3", import.meta.url)), true);
+  assert.match(androidSource, /R\.raw\.wrong_buzzer/);
+  assert.equal(existsSync(new URL("../wrong-buzzer-6268.mp3", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../../composeApp/src/androidMain/res/raw/wrong_buzzer.mp3", import.meta.url)), true);
+  assert.ok(webSource.includes("u_o8xh7gwsrj-cute_happy_victory-476376.mp3"));
+  assert.equal(existsSync(new URL("../u_o8xh7gwsrj-cute_happy_victory-476376.mp3", import.meta.url)), true);
+  assert.ok(androidSource.includes("R.raw.cute_happy_victory"));
+  assert.equal(existsSync(new URL("../../composeApp/src/androidMain/res/raw/cute_happy_victory.mp3", import.meta.url)), true);
+  assert.ok(wasmSource.includes("u_o8xh7gwsrj-cute_happy_victory-476376.mp3"));
+  assert.ok(commonAppSource.includes("GameResult.WINNER -> playWinnerSound()"));
+  assert.match(commonAppSource, /activeTurn \|\| \(failed && snapshot\.gameOverReason == GameOverReason\.WRONG_ANSWER && !snapshot\.failedByAnotherPlayer\(sessionId\)\)/);
+  assert.match(commonAppSource, /Res\.string\.voice_heard, lastHeard/);
+});
+
+test("mute is available across screens and countdown playback resumes without rewinding", async () => {
+  const webSource = await readFile(new URL("../src/app.ts", import.meta.url), "utf8");
+  const eventsSource = await readFile(new URL("../src/events.ts", import.meta.url), "utf8");
+  const rendererSource = await readFile(new URL("../src/render.ts", import.meta.url), "utf8");
+  const androidSource = await readFile(new URL("../../composeApp/src/androidMain/kotlin/com/shahartal/fizzbuzz/Sound.android.kt", import.meta.url), "utf8");
+  const appSource = await readFile(new URL("../../composeApp/src/commonMain/kotlin/com/shahartal/fizzbuzz/App.kt", import.meta.url), "utf8");
+  const syncFunction = webSource.split("function syncCountdownMusic()")[1].split("function speechSupported()")[0];
+
+  assert.match(webSource, /data-action="toggle-mute"/);
+  assert.match(webSource, /seven-boom-sound-muted/);
+  assert.match(webSource, /countdownMusic\.loop = true/);
+  assert.match(webSource, /countdownMusic\.pause\(\);\s*\}/);
+  assert.doesNotMatch(syncFunction, /currentTime\s*=\s*0/);
+  assert.match(syncFunction, /activeGame && !state\.soundMuted/);
+  assert.match(syncFunction, /ownsActiveTurn \? 0\.05 : 0\.05/);
+  assert.match(eventsSource, /case "toggle-mute"/);
+  assert.match(rendererSource, /addTopbar/);
+  assert.match(androidSource, /if \(isPlaying\) pause\(\)/);
+  assert.match(androidSource, /if \(isCurrentPlayerTurn\) 0\.05f else 0\.05f/);
+  assert.match(appSource, /SoundToggleButton\(soundMuted, onToggleSound, compact\)/);
+});
+
+test("speech recognition alternates English and Hebrew when the preferred language misses", async () => {
+  const webSource = await readFile(new URL("../src/app.ts", import.meta.url), "utf8");
+  const wasmSource = await readFile(new URL("../../composeApp/src/wasmJsMain/kotlin/com/shahartal/fizzbuzz/SpeechRecognizer.wasmJs.kt", import.meta.url), "utf8");
+  const androidSource = await readFile(new URL("../../composeApp/src/androidMain/kotlin/com/shahartal/fizzbuzz/SpeechRecognizer.android.kt", import.meta.url), "utf8");
+
+  assert.match(webSource, /recognition\.lang = recognitionLanguage/);
+  assert.match(webSource, /recognitionLanguage = recognitionLanguage === preferredLanguage \? alternateLanguage : preferredLanguage/);
+  assert.match(webSource, /new URLSearchParams\(window\.location\.search\)\.get\("hl"\)/);
+  assert.match(webSource, /requestedLanguage === "he" \|\| \(requestedLanguage !== "en" && locale\.startsWith\("he"\)\)/);
+  assert.match(wasmSource, /recognition\.lang = window\.__countdownSpeechLanguage/);
+  assert.match(wasmSource, /window\.__countdownSpeechLanguage === preferred \? alternate : preferred/);
+  assert.match(androidSource, /recognitionLanguages = listOf/);
+  assert.match(androidSource, /EXTRA_LANGUAGE, recognitionLanguages\[languageIndex\]/);
+});
+
+test("web footer credits the Pixabay music, failure cue, and license on the welcome screen only", async () => {
+  const appSource = await readFile(new URL("../src/app.ts", import.meta.url), "utf8");
+  const renderSource = await readFile(new URL("../src/render.ts", import.meta.url), "utf8");
+
+  assert.match(appSource, /function audioCreditMarkup\(\)/);
+  assert.ok(appSource.includes("pixabay.com/sound-effects/cute-happy-victory-476376"));
+  assert.match(appSource, /pixabay\.com\/music\/main-title-cinematic-tension-suspenseful-thriller-music-loop-297627/);
+  assert.match(appSource, /pixabay\.com\/sound-effects\/film-special-effects-wrong-buzzer-6268/);
+  assert.match(appSource, /pixabay\.com\/service\/license-summary/);
+  assert.match(appSource, /next\.failedSessionId === sessionId\) playFailureSound\(\)/);
+  assert.ok(appSource.includes("isWinnerForSnapshot(next)"));
+  assert.ok(appSource.includes("function isWinnerForSnapshot(snapshot)"));
+  assert.equal((renderSource.match(/audioCreditMarkup\(\)/g) ?? []).length, 1);
+  assert.match(renderSource, /personalRecords.*audioCreditMarkup\(\)/);
+  assert.doesNotMatch(renderSource.split("function renderGame()")[1], /audioCreditMarkup/);
 });
 
 test("7-Boom numbers include multiples of seven and numbers containing seven", () => {
@@ -146,10 +226,23 @@ test("the static web entry references the lightweight client and no Compose/WASM
   assert.match(renderer, /failedPlayer !== sessionId/);
   assert.match(renderer, /playerCount === 2/);
   assert.match(renderer, /rank\.sessionId !== snapshot\.failedSessionId/);
+  assert.match(renderer, /snapshot\.gameOverReason === "wrongAnswer" && snapshot\.failedSessionId === sessionId && state\.lastHeard/);
+  assert.match(app, /function answer\(kind, heardTranscript = null\)/);
+  assert.match(app, /state\.lastHeard = heardTranscript \?\? ""/);
+  assert.match(app, /answer\(answerKind, transcript\)/);
   assert.match(renderer, /playerCount >= 3/);
   assert.match(renderer, /class="result-popup" role="alert"/);
   const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+  const composeApp = await readFile(new URL("../../composeApp/src/commonMain/kotlin/com/shahartal/fizzbuzz/App.kt", import.meta.url), "utf8");
   assert.match(styles, /data-outcome="winner"/);
+  assert.match(styles, /--turquoise: #2da095/);
+  assert.match(styles, /data-outcome="winner"\] \{ background: var\(--turquoise\)/);
+  assert.match(styles, /\.answer-button\.number \{ background: var\(--turquoise\)/);
+  assert.match(styles, /--bordeaux: #a44968/);
+  assert.match(styles, /body\[data-phase="game-over"\] \{ background: var\(--bordeaux\)/);
+  assert.match(styles, /\.answer-button\.boom \{ background: var\(--bordeaux\)/);
+  assert.match(composeApp, /Turquoise = Color\(0xFF2DA095\)/);
+  assert.match(composeApp, /Bordeaux = Color\(0xFFA44968\)/);
   assert.match(styles, /data-outcome="spectator"/);
   assert.match(styles, /@keyframes result-flash/);
   assert.match(styles, /\.player-corner \{ position: absolute/);
@@ -159,6 +252,17 @@ test("the static web entry references the lightweight client and no Compose/WASM
   assert.match(styles, /html\[dir="rtl"\]/);
   assert.match(styles, /@media \(max-width: 390px\)/);
   assert.match(copy, /currentPlayer: "השחקן הנוכחי", you: "אתם"/);
+});
+
+test("web entry uses the replacement PNG icon and shows a one second splash", async () => {
+  const html = await readFile(new URL("../index.html", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../styles.css", import.meta.url), "utf8");
+
+  assert.match(html, /rel="icon" type="image\/png" href="\.\/icon-new\.png"/);
+  assert.match(html, /id="splash-screen"[\s\S]*?src="\.\/icon-new\.png"/);
+  assert.match(html, /\}, 1000\)/);
+  assert.match(styles, /\.splash-screen\s*\{[^}]*position:\s*fixed/);
+  assert.match(styles, /width:\s*min\(58\.8vw, 266px\)/);
 });
 
 test("dialog close actions are handled outside the app root", async () => {

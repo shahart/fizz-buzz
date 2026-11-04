@@ -43,6 +43,14 @@ class GameProtocolTest {
     }
 
     @Test
+    fun decodesNicknameTakenServerError() {
+        assertEquals(
+            ServerErrorMessage("error", "nicknameTaken"),
+            Json.decodeFromString<ServerErrorMessage>("""{"type":"error","code":"nicknameTaken"}"""),
+        )
+    }
+
+    @Test
     fun findsNicknamesForTheActivePlayerAndCurrentUser() {
         val roster = GameRoster(
             "roster",
@@ -54,6 +62,16 @@ class GameProtocolTest {
         assertEquals("🦊", roster.nicknameFor("b"))
         assertNull(roster.nicknameFor("missing"))
         assertNull(roster.nicknameFor(null))
+    }
+
+    @Test
+    fun detectsNicknameTakenByAnotherPlayerButAllowsCurrentPlayersNickname() {
+        val roster = GameRoster("roster", 4, listOf(RosterPlayer("a", "🚀"), RosterPlayer("b", "🦊")))
+
+        assertTrue(roster.isNicknameTakenByOther("a", "🦊"))
+        assertFalse(roster.isNicknameTakenByOther("a", "🚀"))
+        assertFalse(roster.isNicknameTakenByOther("a", "🐼"))
+        assertFalse(null.isNicknameTakenByOther("a", "🦊"))
     }
 
     @Test

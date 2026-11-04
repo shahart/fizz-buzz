@@ -18,6 +18,8 @@ interface BestNumberStore {
     fun saveNickname(value: String)
     fun loadTheme(): String
     fun saveTheme(value: String)
+    fun loadSoundMuted(): Boolean
+    fun saveSoundMuted(value: Boolean)
 }
 
 @Composable

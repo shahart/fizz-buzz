@@ -9,3 +9,5 @@ local.properties
 worker/node_modules
 worker/.wrangler
 composeApp/google-services.json
+node_modules/
+composeApp/release/

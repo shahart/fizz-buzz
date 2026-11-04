@@ -92,6 +92,12 @@ actual fun rememberBestNumberStore(): BestNumberStore {
                     preferences.edit().putString("theme_id", value).apply()
                 }
             }
+
+            override fun loadSoundMuted(): Boolean = preferences.getBoolean("sound_muted", false)
+
+            override fun saveSoundMuted(value: Boolean) {
+                preferences.edit().putBoolean("sound_muted", value).apply()
+            }
         }
     }
 }

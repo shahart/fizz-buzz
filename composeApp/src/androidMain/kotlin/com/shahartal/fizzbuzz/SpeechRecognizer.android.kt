@@ -34,6 +34,15 @@ private class AndroidSpeechRecognizerController(
         putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1_400L)
         putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1_000L)
     }
+    private val recognitionLanguages = listOf(
+        java.util.Locale.getDefault().let { locale ->
+            if (locale.language == "he") "he-IL" else "en-US"
+        },
+        java.util.Locale.getDefault().let { locale ->
+            if (locale.language == "he") "en-US" else "he-IL"
+        },
+    )
+    private var languageIndex = 0
     private var results: List<String>? = null
     private var latestPartial: String? = null
     override var hasDetectedSpeech: Boolean = false
@@ -130,6 +139,8 @@ private class AndroidSpeechRecognizerController(
     private fun beginListening() {
         if (!active || destroyed || listening) return
         try {
+            intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, recognitionLanguages[languageIndex])
+            languageIndex = (languageIndex + 1) % recognitionLanguages.size
             listening = true
             recognizer.startListening(intent)
             Log.d(TAG, "Speech recognition listening")

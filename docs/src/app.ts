@@ -15,13 +15,14 @@ import { bindUiEvents } from "./events.js";
   const NICKNAMES = new Set(EMOJIS);
 
 
+  const requestedLanguage = new URLSearchParams(window.location.search).get("hl");
   const locale = (navigator.language || "en").toLowerCase();
-  const isHebrew = locale.startsWith("he");
+  const isHebrew = requestedLanguage === "he" || (requestedLanguage !== "en" && locale.startsWith("he"));
   const lang = isHebrew ? "he" : "en";
   const strings = COPY[lang];
   document.documentElement.lang = lang;
   document.documentElement.dir = isHebrew ? "rtl" : "ltr";
-  document.title = (isHebrew ? "בום שבע" : "7-Boom") + " v1.11";
+  document.title = (isHebrew ? "שבע בום" : "7-Boom") + " v1.12";
 
   const root = document.getElementById("app")!;
   const byId = (id) => document.getElementById(id);
@@ -33,11 +34,12 @@ import { bindUiEvents } from "./events.js";
   const state: any = {
     connection: "idle", socket: null, snapshot: null, roster: [], rosterRevision: -1,
     offset: 0, nickname: storageGet("seven-boom-nickname-emoji", "😀"),
+    soundMuted: storageGet("seven-boom-sound-muted", "false") === "true",
     theme: storageGet("seven-boom-theme", "classic"), best: numberGet("seven-boom-best-number"),
     lowest: numberGet("seven-boom-lowest-response-time-millis"), responseTotal: 0, responseCount: 0,
     latency: null, pendingPing: null, pingAt: 0, pingTimer: 0, joinTimer: 0,
     lastAnsweredTurn: null, intentionalClose: false, speech: null, speechTurn: null,
-    lastHeard: "", timerInterval: 0, soloRevision: 0, failureFlash: false,
+    lastHeard: "", timerInterval: 0, soloRevision: 0, failureFlash: false, nicknameError: null,
   };
   function logLocalEvent(event, details = {}) {
     console.info("[SevenBoom]", event, details);
@@ -50,6 +52,9 @@ import { bindUiEvents } from "./events.js";
   }
   function esc(value) {
     return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
+  }
+  function audioCreditMarkup() {
+    return `<span class="music-credit">${esc(t("musicCreditPrefix"))} <a href="https://pixabay.com/music/main-title-cinematic-tension-suspenseful-thriller-music-loop-297627/" target="_blank" rel="noopener noreferrer">${esc(t("musicTrackTitle"))}</a> · ${esc(t("musicArtistCredit"))} · <a href="https://pixabay.com/sound-effects/film-special-effects-wrong-buzzer-6268/" target="_blank" rel="noopener noreferrer">${esc(t("failureSoundTitle"))}</a> · ${esc(t("failureSoundArtist"))} · <a href="https://pixabay.com/sound-effects/cute-happy-victory-476376/" target="_blank" rel="noopener noreferrer">${esc(t("winnerSoundTitle"))}</a> · ${esc(t("winnerSoundArtist"))} · <a href="https://pixabay.com/service/license-summary/" target="_blank" rel="noopener noreferrer">${esc(t("pixabayLicense"))}</a></span>`;
   }
   function storageGet(key, fallback) {
     try { return localStorage.getItem(key) ?? fallback; } catch { return fallback; }
@@ -92,7 +97,7 @@ import { bindUiEvents } from "./events.js";
   function addTopbar(extra = "") {
     return `<header class="topbar">
       <a class="brand" href="./" aria-label="${esc(t("brand"))}"><span class="brand-mark" aria-hidden="true">7</span><span>${esc(t("brand"))}</span></a>
-      <div class="topbar-actions">${extra}<span class="top-chip"><span class="connection-dot ${state.connection === "connected" ? "online" : state.connection === "solo" ? "offline" : ""}"></span>${state.connection === "solo" ? esc(t("statusOffline")) : state.connection === "connected" ? "LIVE" : "7-BOOM"}</span></div>
+      <div class="topbar-actions"><button class="icon-button sound-toggle" type="button" data-action="toggle-mute" aria-label="${esc(t(state.soundMuted ? "unmuteSound" : "muteSound"))}" title="${esc(t(state.soundMuted ? "unmuteSound" : "muteSound"))}">${state.soundMuted ? "🔇" : "🔊"}</button>${extra}<span class="top-chip"><span class="connection-dot ${state.connection === "connected" ? "online" : state.connection === "solo" ? "offline" : ""}"></span>${state.connection === "solo" ? esc(t("statusOffline")) : state.connection === "connected" ? "LIVE" : "7-BOOM"}</span></div>
     </header>`;
   }
   function render() {
@@ -107,7 +112,7 @@ import { bindUiEvents } from "./events.js";
     }
     renderer.renderLobby();
   }
-  const renderer = createRenderer({ state, root, addTopbar, t, esc, speechSupported, desktopKeyboardHint, currentTheme, secondsText, feedback, sessionId, NICKNAMES, playerIndicatorsMarkup, updateCountdown, syncSpeech, rosterDialog, renderRoster });
+  const renderer = createRenderer({ state, root, addTopbar, t, esc, audioCreditMarkup, speechSupported, desktopKeyboardHint, currentTheme, secondsText, feedback, sessionId, NICKNAMES, playerIndicatorsMarkup, updateCountdown, syncSpeech, rosterDialog, renderRoster });
   function secondsText(milliseconds) { return ((Math.max(0, milliseconds) + 50) / 1000).toFixed(1); }
   function feedback(number) {
     if (!isBoom(number)) return t("feedbackNumber", { n: number });
@@ -133,6 +138,8 @@ import { bindUiEvents } from "./events.js";
 
   function showNicknamePicker() {
     byId("emoji-grid").innerHTML = EMOJIS.map((emoji) => `<button class="emoji-choice${emoji === state.nickname ? " selected" : ""}" type="button" data-emoji="${emoji}" aria-label="${emoji}" aria-pressed="${emoji === state.nickname}">${emoji}</button>`).join("");
+    byId("emoji-error").textContent = state.nicknameError || "";
+    byId("emoji-error").hidden = !state.nicknameError;
     openDialog(nicknameDialog);
   }
   function showThemePicker() {
@@ -159,10 +166,13 @@ import { bindUiEvents } from "./events.js";
   }
   function openRoster() { renderRoster(); openDialog(rosterDialog); }
 
-  bindUiEvents({ byId, storageSet, render, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew });
+  bindUiEvents({ byId, storageSet, render, syncSoundMute, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew, t, sessionId });
   function startOnline() {
     if (!NICKNAMES.has(state.nickname)) { showNicknamePicker(); return; }
     logLocalEvent("join_started", { mode: "online" });
+    prepareCountdownMusic();
+    prepareFailureSound();
+    prepareWinnerSound();
     clearTimeout(state.joinTimer);
     state.intentionalClose = false;
     state.connection = "joining";
@@ -186,6 +196,16 @@ import { bindUiEvents } from "./events.js";
       try { message = JSON.parse(event.data); } catch { return; }
       if (message.type === "snapshot") acceptSnapshot(message);
       else if (message.type === "roster") acceptRoster(message);
+      else if (message.type === "error" && message.code === "nicknameTaken") {
+        clearTimeout(state.joinTimer);
+        clearInterval(state.pingTimer);
+        state.connection = "idle";
+        state.snapshot = null;
+        state.roster = [];
+        state.nicknameError = t("emojiAlreadyChosen");
+        render();
+        showNicknamePicker();
+      }
       else if (message.type === "pong" && message.id === state.pendingPing) {
         state.latency = Math.max(0, Date.now() - state.pingAt);
         state.pendingPing = null;
@@ -229,6 +249,8 @@ import { bindUiEvents } from "./events.js";
     }
     if (next.phase === "gameOver" && previous?.phase !== "gameOver" && next.gameOverReason !== "noPlayers") {
       logLocalEvent("game_over", { reason: next.gameOverReason, number: next.number, players: next.connectedPlayers });
+      if (next.failedSessionId === sessionId) playFailureSound();
+      else if (isWinnerForSnapshot(next)) playWinnerSound();
     }
     const startsAgain = previous?.phase === "gameOver" && next.phase === "active" && next.number === 1;
     const advancedOurTurn = previous?.phase === "active" && previous.activeSessionId === sessionId && next.phase === "active" && next.number === previous.number + 1;
@@ -237,6 +259,7 @@ import { bindUiEvents } from "./events.js";
     state.snapshot = next;
     state.connection = "connected";
     state.offset = next.serverTime - Date.now();
+    syncCountdownMusic();
     clearTimeout(state.joinTimer);
     closeDialog(offlineDialog);
     render();
@@ -272,9 +295,13 @@ import { bindUiEvents } from "./events.js";
     };
     if (phase === "gameOver") logLocalEvent("game_over", { reason, number, players: 1, mode: "solo" });
     state.offset = 0;
+    syncCountdownMusic();
     render();
   }
   function startSolo() {
+    prepareCountdownMusic();
+    prepareFailureSound();
+    prepareWinnerSound();
     clearTimeout(state.joinTimer);
     clearInterval(state.pingTimer);
     state.intentionalClose = true;
@@ -289,7 +316,7 @@ import { bindUiEvents } from "./events.js";
     state.lastAnsweredTurn = null;
     showSoloSnapshot(1);
   }
-  function answer(kind) {
+  function answer(kind, heardTranscript = null) {
     const snapshot = state.snapshot;
     if (!snapshot || snapshot.phase !== "active" || snapshot.activeSessionId !== sessionId) return;
     if (state.connection !== "connected" && state.connection !== "solo") return;
@@ -297,13 +324,14 @@ import { bindUiEvents } from "./events.js";
     const now = Date.now();
     const responseTime = responseMillis(snapshot.deadline, state.offset, now);
     state.lastAnsweredTurn = snapshot.turnId;
+    syncCountdownMusic();
     state.responseTotal += responseTime;
     state.responseCount += 1;
     state.lowest = state.lowest === 0 ? responseTime : Math.min(state.lowest, responseTime);
     storageSet("seven-boom-lowest-response-time-millis", state.lowest);
     const correct = kind === "boom" ? isBoom(snapshot.number) : !isBoom(snapshot.number) && kind === "number";
     logLocalEvent("answer_submitted", { kind, number: snapshot.number, correct, mode: state.connection, response_ms: responseTime });
-    state.lastHeard = "";
+    state.lastHeard = heardTranscript ?? "";
     stopSpeech();
     if (state.connection === "solo") {
       if (correct) {
@@ -331,20 +359,70 @@ import { bindUiEvents } from "./events.js";
     playFailureSound();
   }
   function playFailureSound() {
-    try {
-      const Audio = window.AudioContext || window.webkitAudioContext;
-      if (!Audio) return;
-      const context = new Audio();
-      const oscillator = context.createOscillator();
-      const gain = context.createGain();
-      oscillator.type = "sine";
-      oscillator.frequency.value = 220;
-      gain.gain.setValueAtTime(.08, context.currentTime);
-      gain.gain.exponentialRampToValueAtTime(.001, context.currentTime + .45);
-      oscillator.connect(gain); gain.connect(context.destination);
-      oscillator.start(); oscillator.stop(context.currentTime + .45);
-      oscillator.onended = () => context.close();
-    } catch { /* Sound is optional. */ }
+    if (state.soundMuted) return;
+    failureSound.currentTime = 0;
+    failureSound.play().catch(() => {});
+  }
+  function playWinnerSound() {
+    if (state.soundMuted) return;
+    winnerSound.currentTime = 0;
+    winnerSound.play().catch(() => {});
+  }
+  function isWinnerForSnapshot(snapshot) {
+    if (snapshot.phase !== "gameOver" || snapshot.failedSessionId == null || snapshot.failedSessionId === sessionId) return false;
+    const rankings = snapshot.responseRankings || [];
+    const playerCount = Math.max(rankings.length, snapshot.connectedPlayers);
+    if (playerCount === 2) return true;
+    if (playerCount < 3) return false;
+    const ownRank = rankings.find((rank) => rank.sessionId === sessionId)?.rank;
+    const bestSurvivingRank = Math.min(
+      ...rankings.filter((rank) => rank.sessionId !== snapshot.failedSessionId).map((rank) => rank.rank),
+      Infinity,
+    );
+    return ownRank != null && ownRank === bestSurvivingRank;
+  }
+  function syncSoundMute() {
+    syncCountdownMusic();
+    if (state.soundMuted) {
+      failureSound.pause();
+      failureSound.currentTime = 0;
+      winnerSound.pause();
+      winnerSound.currentTime = 0;
+    }
+  }
+  const failureSound = new Audio("./wrong-buzzer-6268.mp3");
+  failureSound.volume = 0.4;
+  function prepareFailureSound() {
+    const attempt = failureSound.play();
+    failureSound.pause();
+    if (attempt) attempt.catch(() => {});
+  }
+  const winnerSound = new Audio("./u_o8xh7gwsrj-cute_happy_victory-476376.mp3");
+  winnerSound.volume = 0.4;
+  function prepareWinnerSound() {
+    const attempt = winnerSound.play();
+    winnerSound.pause();
+    if (attempt) attempt.catch(() => {});
+  }
+  const countdownMusic = new Audio("./cyberwave-orchestra-cinematic-tension-suspenseful-thriller-music-loop-297627.mp3");
+  countdownMusic.loop = true;
+  countdownMusic.volume = 0.22;
+  function prepareCountdownMusic() {
+    const attempt = countdownMusic.play();
+    countdownMusic.pause();
+    if (attempt) attempt.catch(() => {});
+  }
+  function syncCountdownMusic() {
+    const snapshot = state.snapshot;
+    const activeGame = snapshot?.phase === "active";
+    const ownsActiveTurn = activeGame && snapshot.activeSessionId === sessionId;
+    if (activeGame && !state.soundMuted) {
+      countdownMusic.volume = ownsActiveTurn ? 0.05 : 0.05;
+      countdownMusic.play().catch(() => {});
+    }
+    else {
+      countdownMusic.pause();
+    }
   }
   function speechSupported() { return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition); }
   function stopSpeech() {
@@ -367,7 +445,10 @@ import { bindUiEvents } from "./events.js";
     try {
       const recognition = new Recognition();
       state.speech = recognition;
-      recognition.lang = isHebrew ? "he-IL" : (navigator.language || "en-US");
+      const preferredLanguage = isHebrew ? "he-IL" : "en-US";
+      const alternateLanguage = preferredLanguage === "he-IL" ? "en-US" : "he-IL";
+      let recognitionLanguage = preferredLanguage;
+      recognition.lang = recognitionLanguage;
       recognition.continuous = false;
       recognition.interimResults = false;
       recognition.maxAlternatives = 1;
@@ -377,12 +458,14 @@ import { bindUiEvents } from "./events.js";
         state.lastHeard = transcript;
         const answerKind = recognizedAnswer(transcript, snapshot.number);
         logLocalEvent("speech_answer", { transcript, expected: snapshot.number, mapped: answerKind });
-        answer(answerKind);
+        answer(answerKind, transcript);
       };
       recognition.onend = () => {
         if (state.snapshot?.phase !== "active" || state.snapshot.activeSessionId !== sessionId || state.snapshot.turnId !== snapshot.turnId || state.connection !== "connected") return;
         setTimeout(() => {
           if (state.speechTurn === snapshot.turnId && state.connection === "connected") {
+            recognitionLanguage = recognitionLanguage === preferredLanguage ? alternateLanguage : preferredLanguage;
+            recognition.lang = recognitionLanguage;
             try { recognition.start(); } catch { /* Touch input stays available. */ }
           }
         }, 300);
@@ -405,10 +488,12 @@ import { bindUiEvents } from "./events.js";
     state.connection = "rejoin";
     state.snapshot = null;
     stopSpeech();
+    syncCountdownMusic();
     render();
   }
   document.addEventListener("visibilitychange", () => { if (document.hidden) leaveOnline(); });
   window.addEventListener("pagehide", () => {
+    countdownMusic.pause();
     if (state.connection === "connected") {
       state.intentionalClose = true;
       try { send({ type: "leave" }); state.socket?.close(); } catch { /* The page is closing. */ }
@@ -416,6 +501,7 @@ import { bindUiEvents } from "./events.js";
   });
   window.setInterval(() => {
     updateCountdown();
+    syncCountdownMusic();
     failSoloForTimeout();
   }, 250);
 

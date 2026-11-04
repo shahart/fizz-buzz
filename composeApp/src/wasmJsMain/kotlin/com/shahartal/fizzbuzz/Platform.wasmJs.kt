@@ -60,6 +60,12 @@ actual fun rememberBestNumberStore(): BestNumberStore = remember {
         override fun saveTheme(value: String) {
             if (value in setOf("classic", "mint", "sunset", "midnight")) browserSaveTheme(value)
         }
+
+        override fun loadSoundMuted(): Boolean = browserLoadSoundMuted()
+
+        override fun saveSoundMuted(value: Boolean) {
+            browserSaveSoundMuted(value)
+        }
     }
 }
 
@@ -152,6 +158,14 @@ private external fun browserLoadTheme(): String
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""value => { try { localStorage.setItem('seven-boom-theme', value); } catch (_) {} }""")
 private external fun browserSaveTheme(value: String)
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""() => { try { return localStorage.getItem('seven-boom-sound-muted') === 'true'; } catch (_) { return false; } }""")
+private external fun browserLoadSoundMuted(): Boolean
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""value => { try { localStorage.setItem('seven-boom-sound-muted', String(value)); } catch (_) {} }""")
+private external fun browserSaveSoundMuted(value: Boolean)
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""(sessionId, nickname) => {

@@ -192,6 +192,17 @@ class GameSession(
                                     val roster = json.decodeFromString<GameRoster>(raw)
                                     mutableState.value = mutableState.value.reduce(roster)
                                 }
+                                "error" -> {
+                                    val error = json.decodeFromString<ServerErrorMessage>(raw)
+                                    if (error.code == "nicknameTaken") {
+                                        shouldBeJoined = false
+                                        mutableState.value = mutableState.value.copy(
+                                            connectionStatus = ConnectionStatus.IDLE,
+                                            nicknameTaken = true,
+                                            latencyMillis = null,
+                                        )
+                                    }
+                                }
                                 "pong" -> {
                                     val pong = json.decodeFromString<PongMessage>(raw)
                                     if (pong.id == pendingPingId) {

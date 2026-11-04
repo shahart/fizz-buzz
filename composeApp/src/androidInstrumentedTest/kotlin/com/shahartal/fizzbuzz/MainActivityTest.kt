@@ -24,6 +24,7 @@ import org.junit.Assert.assertTrue
 import org.junit.BeforeClass
 import org.junit.Rule
 import org.junit.Test
+import org.junit.Ignore
 import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
@@ -35,6 +36,18 @@ class MainActivityTest {
     @Before
     fun savePlayerPreferences() {
         savedPreferences = composeRule.activity.getSharedPreferences("seven_boom_player", 0).all
+    }
+
+    @Test
+    fun lobbyInstructionsAreVisibleAndProminent() {
+        chooseNicknameIfNeeded()
+        requireNotNull(FakeSessionFactory.lastSession).publish(
+            connectedPlayers = 1,
+            activeSessionId = "self",
+            connectionStatus = ConnectionStatus.IDLE,
+        )
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("lobby-instructions").assertIsDisplayed()
     }
 
     @After
@@ -98,6 +111,25 @@ class MainActivityTest {
     }
 
     @Test
+    fun serverRejectedNicknameReopensPickerWithLocalizedFeedback() {
+        if (composeRule.onAllNodesWithTag("nickname-picker").fetchSemanticsNodes().isEmpty()) {
+            composeRule.onNodeWithTag("choose-nickname").performClick()
+        }
+        val original = requireNotNull(FakeSessionFactory.lastSession)
+        composeRule.onNodeWithTag("nickname-choice-${original.nickname}").performClick()
+        composeRule.waitForIdle()
+
+        requireNotNull(FakeSessionFactory.lastSession).rejectNickname()
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag("nickname-picker").assertIsDisplayed()
+        val isRtl = composeRule.activity.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
+        composeRule.onNodeWithText(
+            if (isRtl) "מישהו אחר כבר בחר באימוג׳י הזה. נא לבחור אימוג׳י אחר."
+            else "Someone else has already chosen this emoji. Please choose another.",
+        ).assertIsDisplayed()
+    }
+
+    @Test
     fun submitsBoomWithArrowMappedToBoomInTheActiveLayout() {
         val beforePicker = requireNotNull(FakeSessionFactory.lastSession)
         if (composeRule.onAllNodesWithTag("nickname-picker").fetchSemanticsNodes().isEmpty()) {
@@ -117,6 +149,34 @@ class MainActivityTest {
             )
             assertEquals(listOf("turn-1"), session.boomAnswers)
         }
+    }
+
+    @Test
+    fun muteButtonIsAvailableDuringTheGameAndSavesThePreference() {
+        chooseNicknameIfNeeded()
+        requireNotNull(FakeSessionFactory.lastSession).publish(
+            connectedPlayers = 1,
+            activeSessionId = "self",
+            connectionStatus = ConnectionStatus.CONNECTED,
+        )
+        composeRule.waitForIdle()
+        val preferences = composeRule.activity.getSharedPreferences("seven_boom_player", 0)
+        val wasMuted = preferences.getBoolean("sound_muted", false)
+        val currentTag = if (wasMuted) "sound-toggle-muted" else "sound-toggle-enabled"
+        val toggledTag = if (wasMuted) "sound-toggle-enabled" else "sound-toggle-muted"
+
+        composeRule.onNodeWithTag(currentTag).performScrollTo().assertIsDisplayed().performClick()
+        composeRule.onNodeWithTag(toggledTag).performScrollTo().assertIsDisplayed()
+        composeRule.runOnIdle {
+            assertEquals(!wasMuted, preferences.getBoolean("sound_muted", false))
+        }
+    }
+
+    private fun chooseNicknameIfNeeded() {
+        if (composeRule.onAllNodesWithTag("nickname-picker").fetchSemanticsNodes().isEmpty()) return
+        val session = requireNotNull(FakeSessionFactory.lastSession)
+        composeRule.onNodeWithTag("nickname-choice-${session.nickname}").performClick()
+        composeRule.waitForIdle()
     }
 
     companion object {
@@ -211,4 +271,11 @@ private class FakeGameSession(
     override fun submitNumber(turnId: String, number: Int) { numberAnswers += turnId to number }
     override fun submitRecognition(turnId: String, alternatives: List<String>) = false
     override fun close() = Unit
+
+    fun rejectNickname() {
+        mutableState.value = mutableState.value.copy(
+            connectionStatus = ConnectionStatus.IDLE,
+            nicknameTaken = true,
+        )
+    }
 }

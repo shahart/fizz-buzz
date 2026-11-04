@@ -120,12 +120,6 @@ export class GlobalGame extends DurableObject<Env> {
     server.serializeAttachment({ sessionId, connectionId, nickname } satisfies SocketAttachment);
     this.ctx.acceptWebSocket(server);
 
-    for (const socket of this.ctx.getWebSockets()) {
-      if (socket === server) continue;
-      const attachment = attachmentOf(socket);
-      if (attachment?.sessionId === sessionId) socket.close(4001, "Replaced by reconnect");
-    }
-
     const engine = this.load();
     const now = Date.now();
     const liveSessions = new Set(
@@ -143,6 +137,24 @@ export class GlobalGame extends DurableObject<Env> {
         changed = engine.leave(player.sessionId, now).changed || changed;
       }
     }
+
+    if (engine.players.some((player) => player.sessionId !== sessionId && player.nickname === nickname)) {
+      if (changed) {
+        this.persist(engine.state, engine.players);
+        await this.schedule(engine.state.deadline);
+        this.broadcast(engine);
+      }
+      server.send(JSON.stringify({ type: "error", code: "nicknameTaken" }));
+      server.close(4002, "nickname taken");
+      return new Response(null, { status: 101, webSocket: client });
+    }
+
+    for (const socket of this.ctx.getWebSockets()) {
+      if (socket === server) continue;
+      const attachment = attachmentOf(socket);
+      if (attachment?.sessionId === sessionId) socket.close(4001, "Replaced by reconnect");
+    }
+
     const mutation = engine.join(sessionId, now, nickname, timeZone, countryCode);
     changed = mutation.changed || changed;
     if (changed) {
@@ -286,6 +298,7 @@ export class GlobalGame extends DurableObject<Env> {
     const rosterMessage = JSON.stringify(this.roster(engine));
     const activeSessions = new Set(engine.players.map((player) => player.sessionId));
     for (const socket of this.ctx.getWebSockets()) {
+      if (socket.readyState !== WebSocket.OPEN) continue;
       const attachment = attachmentOf(socket);
       if (engine.state.phase === "active" && (attachment === null || !activeSessions.has(attachment.sessionId))) {
         continue;

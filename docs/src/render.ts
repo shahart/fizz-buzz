@@ -1,7 +1,7 @@
 type RendererDependencies = Record<string, any>;
 
 export function createRenderer(d: RendererDependencies) {
-  const { state, root, addTopbar, t, esc, speechSupported, desktopKeyboardHint, currentTheme, secondsText, feedback, sessionId, NICKNAMES, playerIndicatorsMarkup, updateCountdown, syncSpeech, rosterDialog, renderRoster } = d;
+  const { state, root, addTopbar, t, esc, audioCreditMarkup, speechSupported, desktopKeyboardHint, currentTheme, secondsText, feedback, sessionId, NICKNAMES, playerIndicatorsMarkup, updateCountdown, syncSpeech, rosterDialog, renderRoster } = d;
   function renderLobby() {
     document.body.dataset.outcome = "";
     document.body.dataset.phase = "lobby";
@@ -19,7 +19,7 @@ export function createRenderer(d: RendererDependencies) {
         <p class="instructions">${esc(speechLine)}</p>
         ${desktopKeyboardHint() && speechSupported() ? `<p class="keyboard-note">${esc(t("keyboard"))}</p>` : ""}
         <button class="primary-button join-button" type="button" data-action="join">${esc(t(rejoin ? "rejoin" : "join"))}</button>
-      </section></section><footer class="footer">${esc(t("personalRecords"))} · 7-Boom</footer>`;
+      </section></section><footer class="footer">${esc(t("personalRecords"))} · 7-Boom${audioCreditMarkup()}</footer>`;
   }
   function renderGame() {
     const snapshot = state.snapshot;
@@ -76,6 +76,7 @@ export function createRenderer(d: RendererDependencies) {
         <div class="number-orb" aria-live="off">${snapshot.number}</div>
         ${!failed ? `<div id="turn-progress" class="turn-progress" role="progressbar" aria-label="Turn time remaining" aria-valuemin="0" aria-valuemax="100" aria-valuenow="100"><span id="turn-progress-fill" class="turn-progress-fill"></span></div>` : ""}
         <p class="game-message">${esc(message || (activeTurn && state.lastHeard ? t("voiceHeard", { text: state.lastHeard }) : ""))}</p>
+        ${failed && snapshot.gameOverReason === "wrongAnswer" && snapshot.failedSessionId === sessionId && state.lastHeard ? `<p class="game-message">${esc(t("voiceHeard", { text: state.lastHeard }))}</p>` : ""}
         ${clue ? `<p class="game-message">${esc(clue)}</p>` : ""}
         ${won ? `<div class="result-popup" role="alert">🏆 ${esc(t("youWon"))}</div>` : spectator ? `<div class="result-popup spectator-message" role="status">${esc(t("spectator"))}</div>` : ""}
         ${winners.length ? `<p class="winner-line">${esc(t("winner"))} &nbsp;${winners.map(esc).join(" ")}</p>` : ""}

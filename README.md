@@ -2,7 +2,7 @@
 
 # fizz-buzz 7-boom
 
-A global number game with a lightweight HTML/CSS/TypeScript web client and a Compose Multiplatform Android app. One Cloudflare Durable Object owns the shared counter, player rotation, and seven-second deadline. Say or tap the displayed number, or say `BOOM`/tap 💣 when it is divisible by 7 or contains the digit 7.
+A global number game with a lightweight HTML/CSS/TypeScript web client and a Compose Multiplatform Android app. One Cloudflare Durable Object owns the shared counter, player rotation, and seven-second deadline. Tap or say the displayed number, or say `BOOM`/tap 💣 when it is divisible by 7 or contains the digit 7.
 
 ## Run
 
@@ -10,12 +10,13 @@ Use JDK 17 through 24.
 
 ```bash
 # From the repository root: install web dependencies and compile TypeScript
-pnpm install --frozen-lockfile
-pnpm --filter seven-boom-web-tests run build
+npm --prefix docs ci
+npm --prefix docs run build
 
 # Terminal 1: start the Worker and serve the web client
 cd worker
-pnpm run dev
+npm ci
+npm run dev
 ```
 
 In another terminal, from the repository root:
@@ -34,24 +35,37 @@ Open `http://localhost:8787` in two browser windows to exercise the global rotat
 Run the Worker type-check, Durable Object tests, and web-client unit tests from the repository root:
 
 ```bash
-pnpm --filter global-seven-boom-worker run check
+npm --prefix worker ci
+npm --prefix worker run check
 ```
 
 Run the web-client unit tests and build with:
 
 ```bash
-pnpm --filter seven-boom-web-tests test
-pnpm --filter seven-boom-web-tests run build
+npm --prefix docs test
+npm --prefix docs run build
 ```
 
 Run the browser tests from `docs/`. They start a local static server and use Playwright Chromium with a mocked WebSocket, so no deployed Worker is needed. Build the web client first so the static server can load the compiled modules:
 
 ```bash
-pnpm --filter seven-boom-web-tests exec playwright install chromium
-pnpm --filter seven-boom-web-tests run test:browser
+npx --prefix docs playwright install chromium
+npm --prefix docs run test:browser
 ```
 
-Add `-- --headed` to `pnpm --filter seven-boom-web-tests run test:browser` to see Chromium perform the test actions. Run with `-- --workers=1` to watch the scenarios one at a time.
+Add `-- --headed` to `npm --prefix docs run test:browser` to see Chromium perform the test actions. Run with `-- --workers=1` to watch the scenarios one at a time.
+
+### Using pnpm
+
+The same web and Worker commands are available through the repository pnpm workspace:
+
+```bash
+pnpm install --frozen-lockfile
+pnpm --filter seven-boom-web-tests run build
+pnpm --filter global-seven-boom-worker run check
+pnpm --filter seven-boom-web-tests test
+pnpm --filter seven-boom-web-tests run test:browser
+```
 
 Run the Android/Kotlin tests with:
 
@@ -100,7 +114,36 @@ cd worker
 npx wrangler deploy
 ```
 
-Or run the equivalent package script with `npm run deploy`. No account, credentials, room codes, or free-text player names are used. Each player chooses a nickname from the built-in emoji list; it is remembered in Android SharedPreferences or browser local storage and sent to the game Worker. At game over, the emoji belonging to the fastest average response-time rank is shown as the winner (including every rank-one emoji in a tie).
+Or run the equivalent package script with `npm run deploy`. No account, credentials, room codes, or free-text player names are used. Each player chooses an unused nickname from the built-in emoji list; if another connected player already uses it, the Worker rejects the join and the player is prompted to choose another. The nickname is remembered in Android SharedPreferences or browser local storage and sent to the game Worker. At game over, the emoji belonging to the fastest average response-time rank is shown as the winner (including every rank-one emoji in a tie).
+
+### Multiplayer join and nickname validation
+
+Both clients submit the selected emoji as part of the WebSocket URL. The Worker checks it against the live roster before admitting a new player. A collision returns a typed WebSocket error and closes that attempt; the client reopens the picker with a localized prompt. A player's existing session may reconnect with its current emoji or change to an unused one.
+
+```mermaid
+sequenceDiagram
+    actor Player
+    participant Client as Android or web client
+    participant Worker as Cloudflare Worker
+    participant Game as GlobalGame Durable Object
+    participant Peers as Connected players
+
+    Player->>Client: Choose emoji and tap Join game
+    loop Until the nickname is accepted
+        Client->>Worker: WebSocket upgrade with sessionId and nickname
+        Worker->>Game: Check live roster for nickname
+        alt Emoji belongs to another connected player
+            Game-->>Client: error: nicknameTaken, then close (4002)
+            Client-->>Player: Reopen picker and ask for another emoji
+            Player->>Client: Choose another emoji and retry
+        else Emoji is available or belongs to this session
+            Game->>Game: Add or update player and persist roster
+            Game-->>Client: snapshot and roster
+            Game-->>Peers: Updated snapshot and roster
+            Client-->>Player: Enter multiplayer game
+        end
+    end
+```
 
 The Android app opens its WebSocket and requests microphone access only after **Join game**. The browser client uses Web Speech when available; answer buttons work without speech support. Hiding the browser page or backgrounding Android leaves the roster and requires **Rejoin game** on return.
 

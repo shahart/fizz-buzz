@@ -4,22 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#EAF4FF">
-    <link rel="icon" type="image/svg+xml" href="icon.svg">
-    <title>fizz-buzz 7-boom 1.11</title>
+    <link rel="icon" type="image/png" href="icon-new.png">
+    <title>fizz-buzz 7-boom 1.12</title>
     <script>
         let isHebrew = (navigator.language || "").toLowerCase().startsWith("he");
         document.documentElement.lang = isHebrew ? "he" : "en";
         document.documentElement.dir = isHebrew ? "rtl" : "ltr";
         if (isHebrew) {
-            document.title = "1.11 פיז-באז 7-בום";
+            document.title = "1.12 פיז-באז 7-בום";
         }
     </script>
     <style>
         html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
         body { background: #EAF4FF; }
+        #splash-screen { position: fixed; z-index: 1000; inset: 0; display: grid; place-items: center; background: #EAF4FF; }
+        #splash-screen img { display: block; width: min(58.8vw, 266px); height: min(58.8vw, 266px); object-fit: contain; }
     </style>
 </head>
 <body>
+    <div id="splash-screen" role="status" aria-label="7-Boom"><img src="icon-new.png" alt=""></div>
+    <script>
+        window.setTimeout(() => document.getElementById("splash-screen")?.remove(), 1000);
+    </script>
     <script src="firebase-config.js"></script>
     <script type="module">
         const firebaseConfig = globalThis.firebaseConfig;
