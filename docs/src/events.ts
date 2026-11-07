@@ -1,5 +1,5 @@
 export function bindUiEvents(d: Record<string, any>) {
-  const { byId, storageSet, render, syncSoundMute, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew, t, sessionId } = d;
+  const { byId, storageSet, render, syncSoundMute, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, firefoxSpeechDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew, t, sessionId } = d;
   document.addEventListener("click", (event) => {
     const button = (event.target as Element).closest<HTMLElement>("[data-action]");
     if (!button) return;
@@ -17,6 +17,7 @@ export function bindUiEvents(d: Record<string, any>) {
       case "close-nickname": closeDialog(nicknameDialog); break;
       case "close-theme": closeDialog(themeDialog); break;
       case "close-roster": closeDialog(rosterDialog); break;
+      case "close-firefox-speech": closeDialog(firefoxSpeechDialog); break;
       case "continue-solo": closeDialog(offlineDialog); startSolo(); break;
       case "answer-boom": answer("boom"); break;
       case "answer-number": answer("number"); break;

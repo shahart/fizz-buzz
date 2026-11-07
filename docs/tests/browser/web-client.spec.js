@@ -270,6 +270,18 @@ test("nickname and theme dialogs update the rendered lobby and persist preferenc
   expect(await page.evaluate(() => localStorage.getItem("seven-boom-theme"))).toBe("classic");
 });
 
+test("Firefox users see a speech support notice and can dismiss it to use answer buttons", async ({ page }) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "userAgent", { configurable: true, get: () => "Mozilla/5.0 Firefox/130.0" });
+  });
+  await page.goto("/");
+  await expect(page.locator("#firefox-speech-dialog")).toBeVisible();
+  await expect(page.locator("#firefox-speech-dialog")).toContainText("Firefox does not currently support the speech recognition");
+  await page.getByRole("button", { name: "Close", exact: true }).last().click();
+  await expect(page.locator("#firefox-speech-dialog")).toBeHidden();
+  await expect(page.getByRole("button", { name: "Join game" })).toBeVisible();
+});
+
 test("nickname picker rejects an emoji already used by another roster player", async ({ page }) => {
   const { sessionId } = await connectWithRoster(page);
   await page.evaluate(() => {

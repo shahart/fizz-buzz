@@ -51,6 +51,15 @@
     <button class="primary-button" type="button" data-action="continue-solo" data-copy="continue"></button>
   </dialog>
 
+  <dialog id="firefox-speech-dialog" class="dialog" aria-labelledby="firefox-speech-title">
+    <div class="dialog-head">
+      <div><p class="eyebrow" data-copy="speechNoticeEyebrow"></p><h2 id="firefox-speech-title" data-copy="speechNoticeTitle"></h2></div>
+      <button class="icon-button" type="button" data-action="close-firefox-speech" data-label="close" aria-label="Close">×</button>
+    </div>
+    <p class="dialog-note" data-copy="firefoxSpeechMessage"></p>
+    <button class="primary-button" type="button" data-action="close-firefox-speech" data-copy="close"></button>
+  </dialog>
+
   <script src="./firebase-config.js"></script>
   <script>
     window.setTimeout(() => {

@@ -30,6 +30,7 @@ import { bindUiEvents } from "./events.js";
   const themeDialog = byId("theme-dialog") as HTMLDialogElement;
   const rosterDialog = byId("roster-dialog") as HTMLDialogElement;
   const offlineDialog = byId("offline-dialog") as HTMLDialogElement;
+  const firefoxSpeechDialog = byId("firefox-speech-dialog") as HTMLDialogElement;
   const sessionId = makeSessionId();
   const state: any = {
     connection: "idle", socket: null, snapshot: null, roster: [], rosterRevision: -1,
@@ -168,7 +169,7 @@ import { bindUiEvents } from "./events.js";
   }
   function openRoster() { renderRoster(); openDialog(rosterDialog); }
 
-  bindUiEvents({ byId, storageSet, render, syncSoundMute, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew, t, sessionId });
+  bindUiEvents({ byId, storageSet, render, syncSoundMute, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, firefoxSpeechDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew, t, sessionId });
   function startOnline() {
     if (!NICKNAMES.has(state.nickname)) { showNicknamePicker(); return; }
     logLocalEvent("join_started", { mode: "online" });
@@ -596,6 +597,7 @@ import { bindUiEvents } from "./events.js";
 
   for (const element of document.querySelectorAll<HTMLElement>("[data-copy]")) element.textContent = t(element.dataset.copy);
   for (const element of document.querySelectorAll<HTMLElement>("[data-label]")) element.setAttribute("aria-label", t(element.dataset.label));
+  if (/Firefox|FxiOS/i.test(navigator.userAgent)) openDialog(firefoxSpeechDialog);
   applyTheme();
   render();
   // void loadNativeSpeech();
