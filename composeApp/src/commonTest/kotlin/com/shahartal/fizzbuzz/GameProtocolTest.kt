@@ -163,6 +163,7 @@ class GameProtocolTest {
 
         assertEquals(GameResult.LOSER, twoPlayerGame.resultFor("a"))
         assertEquals(GameResult.WINNER, twoPlayerGame.resultFor("b"))
+        assertEquals(GameResult.NONE, twoPlayerGame.copy(connectedPlayers = 2).resultFor("late-joiner"))
         assertEquals(listOf("🐼"), twoPlayerGame.copy(responseRankings = listOf(
             ResponseRanking("a", rank = 1, averageMillis = 500, nickname = "🦊"),
             ResponseRanking("b", rank = 2, averageMillis = 700, nickname = "🐼"),

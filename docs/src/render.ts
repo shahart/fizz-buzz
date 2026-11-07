@@ -1,3 +1,5 @@
+import { isWinnerForSnapshot } from "../game-core.mjs";
+
 type RendererDependencies = Record<string, any>;
 
 export function createRenderer(d: RendererDependencies) {
@@ -42,9 +44,7 @@ export function createRenderer(d: RendererDependencies) {
     const survivingRankings = rankings.filter((rank) => rank.sessionId !== snapshot.failedSessionId);
     const bestSurvivingRank = Math.min(...survivingRankings.map((rank) => rank.rank), Infinity);
     const failedPlayer = snapshot.failedSessionId;
-    const won = failed && failedPlayer != null && failedPlayer !== sessionId && (
-      playerCount === 2 || (playerCount >= 3 && ownRank?.rank === bestSurvivingRank)
-    );
+    const won = isWinnerForSnapshot(snapshot, sessionId);
     const spectator = failed && playerCount >= 3 && failedPlayer !== sessionId && !won;
     const outcome = won ? "winner" : spectator ? "spectator" : failed ? "loser" : "";
     document.body.dataset.outcome = outcome;

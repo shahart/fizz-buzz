@@ -1,4 +1,4 @@
-import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, playerIndicatorsMarkup, recognizedAnswer, remainingProgress, remainingSeconds, responseMillis } from "../game-core.mjs";
+import { EMOJIS, TURN_MS, answerMessage, gameSocketUrl, isBoom, isWinnerForSnapshot, playerIndicatorsMarkup, recognizedAnswer, remainingProgress, remainingSeconds, responseMillis } from "../game-core.mjs";
 import { COPY } from "./copy.js";
 import { createRenderer } from "./render.js";
 import { bindUiEvents } from "./events.js";
@@ -22,7 +22,7 @@ import { bindUiEvents } from "./events.js";
   const strings = COPY[lang];
   document.documentElement.lang = lang;
   document.documentElement.dir = isHebrew ? "rtl" : "ltr";
-  document.title = (isHebrew ? "שבע בום" : "7-Boom") + " v1.12";
+  document.title = (isHebrew ? "שבע בום" : "7-Boom") + " v1.13";
 
   const root = document.getElementById("app")!;
   const byId = (id) => document.getElementById(id);
@@ -41,6 +41,8 @@ import { bindUiEvents } from "./events.js";
     lastAnsweredTurn: null, intentionalClose: false, restartAfterConnect: false, speech: null, speechTurn: null,
     lastHeard: "", timerInterval: 0, soloRevision: 0, failureFlash: false, nicknameError: null,
   };
+  // let nativeSpeechPlugin: any = null;
+  // let nativeSpeechAvailable = false;
   function logLocalEvent(event, details = {}) {
     console.info("[SevenBoom]", event, details);
   }
@@ -255,7 +257,7 @@ import { bindUiEvents } from "./events.js";
     if (next.phase === "gameOver" && previous?.phase !== "gameOver" && next.gameOverReason !== "noPlayers") {
       logLocalEvent("game_over", { reason: next.gameOverReason, number: next.number, players: next.connectedPlayers });
       if (next.failedSessionId === sessionId) playFailureSound();
-      else if (isWinnerForSnapshot(next)) playWinnerSound();
+      else if (isWinnerForSnapshot(next, sessionId)) playWinnerSound();
     }
     const startsAgain = previous?.phase === "gameOver" && next.phase === "active" && next.number === 1;
     if (state.restartAfterConnect) {
@@ -377,19 +379,6 @@ import { bindUiEvents } from "./events.js";
     winnerSound.currentTime = 0;
     winnerSound.play().catch(() => {});
   }
-  function isWinnerForSnapshot(snapshot) {
-    if (snapshot.phase !== "gameOver" || snapshot.failedSessionId == null || snapshot.failedSessionId === sessionId) return false;
-    const rankings = snapshot.responseRankings || [];
-    const playerCount = Math.max(rankings.length, snapshot.connectedPlayers);
-    if (playerCount === 2) return true;
-    if (playerCount < 3) return false;
-    const ownRank = rankings.find((rank) => rank.sessionId === sessionId)?.rank;
-    const bestSurvivingRank = Math.min(
-      ...rankings.filter((rank) => rank.sessionId !== snapshot.failedSessionId).map((rank) => rank.rank),
-      Infinity,
-    );
-    return ownRank != null && ownRank === bestSurvivingRank;
-  }
   function syncSoundMute() {
     syncCountdownMusic();
     if (state.soundMuted) {
@@ -433,16 +422,28 @@ import { bindUiEvents } from "./events.js";
       countdownMusic.pause();
     }
   }
+  // function isNativeCapacitor() { return Boolean(window.Capacitor?.isNativePlatform?.()); }
   function speechSupported() { return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition); }
+  // function speechSupported() { return nativeSpeechAvailable || (!isNativeCapacitor() && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)); }
   function stopSpeech() {
     state.speechTurn = null;
     if (!state.speech) return;
+    // if (state.speech.native) {
+    //   state.speech = null;
+    //   nativeSpeechPlugin?.stop().catch(() => {});
+    //   return;
+    // }
     state.speech.onend = null;
     try { state.speech.abort(); } catch { /* Recognition may already be stopped. */ }
     state.speech = null;
   }
   function syncSpeech() {
     const snapshot = state.snapshot;
+    // const native = isNativeCapacitor();
+    // if (native && (!nativeSpeechPlugin || !nativeSpeechAvailable)) {
+    //   if (state.speech) stopSpeech();
+    //   return;
+    // }
     if (!speechSupported() || state.connection !== "connected" || snapshot?.phase !== "active" || snapshot.activeSessionId !== sessionId) {
       if (state.speech) stopSpeech();
       return;
@@ -450,6 +451,10 @@ import { bindUiEvents } from "./events.js";
     if (state.speechTurn === snapshot.turnId) return;
     stopSpeech();
     state.speechTurn = snapshot.turnId;
+    // if (native) {
+    //   startNativeSpeech(snapshot);
+    //   return;
+    // }
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     try {
       const recognition = new Recognition();
@@ -487,6 +492,68 @@ import { bindUiEvents } from "./events.js";
       }, 150);
     } catch { state.speechTurn = null; }
   }
+  /*async function startNativeSpeech(snapshot) {
+    const controller = { native: true };
+    state.speech = controller;
+    const preferredLanguage = isHebrew ? "he-IL" : "en-US";
+    const alternateLanguage = preferredLanguage === "he-IL" ? "en-US" : "he-IL";
+    let recognitionLanguage = preferredLanguage;
+    const isCurrentTurn = () => state.speech === controller
+      && state.connection === "connected"
+      && state.snapshot?.phase === "active"
+      && state.snapshot.activeSessionId === sessionId
+      && state.snapshot.turnId === snapshot.turnId;
+    try {
+      let permission = await nativeSpeechPlugin.checkPermissions();
+      if (permission.speechRecognition !== "granted") permission = await nativeSpeechPlugin.requestPermissions();
+      if (permission.speechRecognition !== "granted") {
+        nativeSpeechAvailable = false;
+        render();
+        return;
+      }
+      while (isCurrentTurn()) {
+        try {
+          const result = await nativeSpeechPlugin.start({
+            language: recognitionLanguage,
+            maxResults: 1,
+            partialResults: false,
+            popup: false,
+          });
+          const transcript = result.matches?.[0];
+          if (transcript && isCurrentTurn()) {
+            state.lastHeard = transcript;
+            const answerKind = recognizedAnswer(transcript, snapshot.number);
+            logLocalEvent("speech_answer", { transcript, expected: snapshot.number, mapped: answerKind });
+            answer(answerKind, transcript);
+            return;
+          }
+        } catch { } // Keep touch input available if the native recognizer rejects an attempt. 
+        await new Promise((resolve) => setTimeout(resolve, 250));
+        recognitionLanguage = recognitionLanguage === preferredLanguage ? alternateLanguage : preferredLanguage;
+      }
+    } catch {
+      nativeSpeechAvailable = false;
+      render();
+    } finally {
+      if (state.speech === controller) {
+        state.speech = null;
+        if (state.snapshot?.turnId === snapshot.turnId) state.speechTurn = null;
+      }
+    }
+  }
+  async function loadNativeSpeech() {
+    if (!isNativeCapacitor()) return;
+    try {
+      const module = await import("./native-speech-adapter.js");
+      nativeSpeechPlugin = module.SpeechRecognition;
+      const { available } = await nativeSpeechPlugin.available();
+      nativeSpeechAvailable = available;
+    } catch {
+      nativeSpeechAvailable = false;
+    }
+    render();
+    syncSpeech();
+  }*/
   function leaveOnline() {
     if (state.connection !== "connected" || !state.socket) return;
     state.intentionalClose = true;
@@ -531,4 +598,5 @@ import { bindUiEvents } from "./events.js";
   for (const element of document.querySelectorAll<HTMLElement>("[data-label]")) element.setAttribute("aria-label", t(element.dataset.label));
   applyTheme();
   render();
+  // void loadNativeSpeech();
 })();

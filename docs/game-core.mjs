@@ -31,6 +31,21 @@ export function hasMultiplePlayers(connectedPlayers) {
   return connectedPlayers > 1;
 }
 
+export function isWinnerForSnapshot(snapshot, sessionId) {
+  if (snapshot.phase !== "gameOver" || snapshot.failedSessionId == null || snapshot.failedSessionId === sessionId) return false;
+  const rankings = snapshot.responseRankings || [];
+  const ownRank = rankings.find((rank) => rank.sessionId === sessionId)?.rank;
+  if (ownRank == null) return false;
+  const playerCount = Math.max(rankings.length, snapshot.connectedPlayers);
+  if (playerCount === 2) return true;
+  if (playerCount < 3) return false;
+  const bestSurvivingRank = Math.min(
+    ...rankings.filter((rank) => rank.sessionId !== snapshot.failedSessionId).map((rank) => rank.rank),
+    Infinity,
+  );
+  return ownRank === bestSurvivingRank;
+}
+
 export function playerIndicatorsMarkup({ connectedPlayers, currentEmoji, yourEmoji, currentLabel, youLabel, active = true }) {
   if (!active || !hasMultiplePlayers(connectedPlayers)) return "";
   const escape = (value) => String(value).replace(/[&<>"']/g, (char) => ({

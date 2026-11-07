@@ -96,13 +96,14 @@ fun GameSnapshot.resultFor(sessionId: String): GameResult {
     if (phase != GamePhase.GAME_OVER || gameOverReason == GameOverReason.NO_PLAYERS) return GameResult.NONE
     if (failedSessionId == sessionId) return GameResult.LOSER
     if (failedSessionId == null) return GameResult.NONE
+    val ownRank = responseRankings.orEmpty().firstOrNull { it.sessionId == sessionId }?.rank
+        ?: return GameResult.NONE
     val playerCount = maxOf(rankingsCount(), connectedPlayers)
     if (playerCount == 2) return GameResult.WINNER
     val survivingRank = responseRankings.orEmpty()
         .filter { it.sessionId != failedSessionId }
         .minOfOrNull { it.rank }
-    val ownRank = responseRankings.orEmpty().firstOrNull { it.sessionId == sessionId }?.rank
-    if (playerCount >= 3 && ownRank != null && ownRank == survivingRank) return GameResult.WINNER
+    if (playerCount >= 3 && ownRank == survivingRank) return GameResult.WINNER
     if (playerCount >= 3) return GameResult.SPECTATOR
     return GameResult.NONE
 }

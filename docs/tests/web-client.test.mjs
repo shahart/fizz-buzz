@@ -9,6 +9,7 @@ import {
   gameSocketUrl,
   hasMultiplePlayers,
   isBoom,
+  isWinnerForSnapshot,
   playerIndicatorsMarkup,
   remainingProgress,
   recognizedAnswer,
@@ -20,6 +21,24 @@ test("the emoji nickname list is unique and matches the expected roster size", (
   assert.equal(EMOJIS.length, 24);
   assert.equal(new Set(EMOJIS).size, EMOJIS.length);
 });
+
+/*test("Capacitor clients use native speech recognition with platform permissions", async () => {
+  const appSource = await readFile(new URL("../src/app.ts", import.meta.url), "utf8");
+  const wrapperConfig = JSON.parse(await readFile(new URL("../../capacitor-app/capacitor.config.json", import.meta.url), "utf8"));
+  const capacitorPackage = JSON.parse(await readFile(new URL("../../capacitor-app/package.json", import.meta.url), "utf8"));
+  const androidManifest = await readFile(new URL("../../capacitor-app/android/app/src/main/AndroidManifest.xml", import.meta.url), "utf8");
+  const iosPlist = await readFile(new URL("../../capacitor-app/ios/App/App/Info.plist", import.meta.url), "utf8");
+
+  assert.equal(wrapperConfig.webDir, "www");
+  assert.equal(capacitorPackage.dependencies["@capacitor-community/speech-recognition"], "^7.0.1");
+  assert.match(appSource, /window\.Capacitor\?\.isNativePlatform\?\.\(\)/);
+  assert.match(appSource, /nativeSpeechPlugin\.requestPermissions\(\)/);
+  assert.match(appSource, /nativeSpeechPlugin\.start\(\{/);
+  assert.match(appSource, /nativeSpeechPlugin\?\.stop\(\)/);
+  assert.match(androidManifest, /android:name="android\.permission\.RECORD_AUDIO"/);
+  assert.match(iosPlist, /NSMicrophoneUsageDescription/);
+  assert.match(iosPlist, /NSSpeechRecognitionUsageDescription/);
+});*/
 
 test("countdown music is available to the web and Android clients", async () => {
   const track = "cyberwave-orchestra-cinematic-tension-suspenseful-thriller-music-loop-297627.mp3";
@@ -93,8 +112,7 @@ test("web footer credits the Pixabay music, failure cue, and license on the welc
   assert.match(appSource, /pixabay\.com\/sound-effects\/film-special-effects-wrong-buzzer-6268/);
   assert.match(appSource, /pixabay\.com\/service\/license-summary/);
   assert.match(appSource, /next\.failedSessionId === sessionId\) playFailureSound\(\)/);
-  assert.ok(appSource.includes("isWinnerForSnapshot(next)"));
-  assert.ok(appSource.includes("function isWinnerForSnapshot(snapshot)"));
+  assert.ok(appSource.includes("isWinnerForSnapshot(next, sessionId)"));
   assert.equal((renderSource.match(/audioCreditMarkup\(\)/g) ?? []).length, 1);
   assert.match(renderSource, /personalRecords.*audioCreditMarkup\(\)/);
   assert.doesNotMatch(renderSource.split("function renderGame()")[1], /audioCreditMarkup/);
@@ -110,6 +128,21 @@ test("player indicators are hidden for a solo game and shown for multiple player
   assert.equal(hasMultiplePlayers(1), false);
   assert.equal(hasMultiplePlayers(2), true);
   assert.equal(hasMultiplePlayers(10), true);
+});
+
+test("a late joiner absent from the round rankings is not treated as a winner", () => {
+  const finishedTwoPlayerRound = {
+    phase: "gameOver",
+    gameOverReason: "wrongAnswer",
+    failedSessionId: "failed",
+    connectedPlayers: 2,
+    responseRankings: [
+      { sessionId: "failed", rank: 1 },
+      { sessionId: "survivor", rank: 2 },
+    ],
+  };
+  assert.equal(isWinnerForSnapshot(finishedTwoPlayerRound, "survivor"), true);
+  assert.equal(isWinnerForSnapshot(finishedTwoPlayerRound, "late-joiner"), false);
 });
 
 test("player indicator markup follows live player count, active turn, localization, and HTML escaping", () => {
@@ -224,7 +257,7 @@ test("the static web entry references the lightweight client and no Compose/WASM
   assert.equal([...renderer.matchAll(/data-action="open-roster"/g)].length, 1);
   assert.match(renderer, /class="answer-button number"[^>]*aria-label="\$\{esc\(t\("answerNumber"\)\)\}"><\/button>/);
   assert.match(renderer, /failedPlayer !== sessionId/);
-  assert.match(renderer, /playerCount === 2/);
+  assert.match(renderer, /isWinnerForSnapshot\(snapshot, sessionId\)/);
   assert.match(renderer, /rank\.sessionId !== snapshot\.failedSessionId/);
   assert.match(renderer, /snapshot\.gameOverReason === "wrongAnswer" && snapshot\.failedSessionId === sessionId && state\.lastHeard/);
   assert.match(app, /function answer\(kind, heardTranscript = null\)/);
