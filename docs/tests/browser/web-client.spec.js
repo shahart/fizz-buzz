@@ -162,6 +162,30 @@ test("player indicators render, follow turn changes and roster updates, and hide
   await expect(page.getByRole("button", { name: "Play again" })).toBeVisible();
 });
 
+test("play again reconnects and retries the restart after receiving the game snapshot", async ({ page }) => {
+  const { sessionId } = await connectWithRoster(page);
+  await page.evaluate(() => {
+    window.__mockSockets[0].emit("message", { data: JSON.stringify({
+      type: "snapshot", revision: 2, phase: "gameOver", number: 9,
+      turnId: null, activeSessionId: null, connectedPlayers: 2,
+      serverTime: Date.now(), deadline: null, gameOverReason: "wrongAnswer",
+      failedSessionId: "other-session", responseRankings: [],
+    }) });
+  });
+  await page.getByRole("button", { name: "Play again" }).click();
+  await expect.poll(() => page.evaluate(() => window.__mockSockets.length)).toBe(2);
+  await page.evaluate(() => window.__mockSockets[1].emit("open"));
+  await page.evaluate(({ sessionId }) => {
+    window.__mockSockets[1].emit("message", { data: JSON.stringify({
+      type: "snapshot", revision: 3, phase: "gameOver", number: 9,
+      turnId: null, activeSessionId: null, connectedPlayers: 2,
+      serverTime: Date.now(), deadline: null, gameOverReason: "wrongAnswer",
+      failedSessionId: "other-session", responseRankings: [],
+    }) });
+  }, { sessionId });
+  await expect.poll(() => page.evaluate(() => window.__mockSockets[1].sent.map((message) => JSON.parse(message)))).toContainEqual({ type: "restart" });
+});
+
 test("missing roster data uses the fallback emoji and stale roster revisions are ignored", async ({ page }) => {
   await connectWithRoster(page);
   await page.evaluate(() => {

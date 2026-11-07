@@ -20,7 +20,14 @@ export function bindUiEvents(d: Record<string, any>) {
       case "continue-solo": closeDialog(offlineDialog); startSolo(); break;
       case "answer-boom": answer("boom"); break;
       case "answer-number": answer("number"); break;
-      case "play-again": if (state.connection === "solo") startSolo(); else { logLocalEvent("restart_requested"); send({ type: "restart" }); } break;
+      case "play-again":
+        if (state.connection === "solo") startSolo();
+        else {
+          logLocalEvent("restart_requested");
+          state.restartAfterConnect = true;
+          startOnline();
+        }
+        break;
     }
   });
   byId("emoji-grid").addEventListener("click", (event) => {

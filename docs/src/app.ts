@@ -38,7 +38,7 @@ import { bindUiEvents } from "./events.js";
     theme: storageGet("seven-boom-theme", "classic"), best: numberGet("seven-boom-best-number"),
     lowest: numberGet("seven-boom-lowest-response-time-millis"), responseTotal: 0, responseCount: 0,
     latency: null, pendingPing: null, pingAt: 0, pingTimer: 0, joinTimer: 0,
-    lastAnsweredTurn: null, intentionalClose: false, speech: null, speechTurn: null,
+    lastAnsweredTurn: null, intentionalClose: false, restartAfterConnect: false, speech: null, speechTurn: null,
     lastHeard: "", timerInterval: 0, soloRevision: 0, failureFlash: false, nicknameError: null,
   };
   function logLocalEvent(event, details = {}) {
@@ -174,6 +174,7 @@ import { bindUiEvents } from "./events.js";
     prepareFailureSound();
     prepareWinnerSound();
     clearTimeout(state.joinTimer);
+    clearInterval(state.pingTimer);
     state.intentionalClose = false;
     state.connection = "joining";
     state.snapshot = null;
@@ -181,17 +182,19 @@ import { bindUiEvents } from "./events.js";
     state.lastAnsweredTurn = null;
     render();
     const url = gameSocketUrl(location);
-    try { state.socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(sessionId)}&nickname=${encodeURIComponent(state.nickname)}&timeZone=${encodeURIComponent(localTimeZone())}`); }
+    let socket;
+    try { socket = state.socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(sessionId)}&nickname=${encodeURIComponent(state.nickname)}&timeZone=${encodeURIComponent(localTimeZone())}`); }
     catch { showOffline(); return; }
     state.joinTimer = setTimeout(() => {
       if (state.connection === "joining") showOffline();
     }, 9000);
-    state.socket.addEventListener("open", () => {
-      if (state.connection !== "joining") return;
+    socket.addEventListener("open", () => {
+      if (state.socket !== socket || state.connection !== "joining") return;
       logLocalEvent("connection_open");
       state.pingTimer = window.setInterval(sendPing, 2000);
     });
-    state.socket.addEventListener("message", (event) => {
+    socket.addEventListener("message", (event) => {
+      if (state.socket !== socket) return;
       let message;
       try { message = JSON.parse(event.data); } catch { return; }
       if (message.type === "snapshot") acceptSnapshot(message);
@@ -212,12 +215,14 @@ import { bindUiEvents } from "./events.js";
         updateCountdown();
       }
     });
-    state.socket.addEventListener("error", () => {
+    socket.addEventListener("error", () => {
+      if (state.socket !== socket) return;
       if (state.connection === "joining") showOffline();
     });
-    state.socket.addEventListener("close", () => {
+    socket.addEventListener("close", () => {
       clearTimeout(state.joinTimer);
       clearInterval(state.pingTimer);
+      if (state.socket !== socket) return;
       if (state.intentionalClose || !["joining", "connected"].includes(state.connection)) return;
       state.connection = "soloPending";
       state.snapshot = null;
@@ -253,6 +258,10 @@ import { bindUiEvents } from "./events.js";
       else if (isWinnerForSnapshot(next)) playWinnerSound();
     }
     const startsAgain = previous?.phase === "gameOver" && next.phase === "active" && next.number === 1;
+    if (state.restartAfterConnect) {
+      state.restartAfterConnect = false;
+      if (next.phase === "gameOver") send({ type: "restart" });
+    }
     const advancedOurTurn = previous?.phase === "active" && previous.activeSessionId === sessionId && next.phase === "active" && next.number === previous.number + 1;
     if (startsAgain) { state.responseTotal = 0; state.responseCount = 0; state.lastAnsweredTurn = null; }
     if (advancedOurTurn) { state.best = Math.max(state.best, previous.number); storageSet("seven-boom-best-number", state.best); }

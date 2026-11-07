@@ -65,6 +65,7 @@ class GameSession(
     private var pingSequence = 0L
     private var pendingPingId: String? = null
     private var pendingPingStartedAt = 0L
+    private var restartAfterConnect = false
 
     override fun join() {
         if (shouldBeJoined) return
@@ -96,7 +97,13 @@ class GameSession(
         if (mutableState.value.connectionStatus == ConnectionStatus.SOLO) {
             startSoloGame()
         } else {
-            send("{\"type\":\"restart\"}")
+            restartAfterConnect = true
+            connection = null
+            connectionJob?.cancel()
+            mutableState.value = mutableState.value.copy(connectionStatus = ConnectionStatus.JOINING)
+            connectionJob = scope.launch {
+                connectionLoop()
+            }
         }
     }
 
@@ -187,6 +194,12 @@ class GameSession(
                                 "snapshot" -> {
                                     val snapshot = json.decodeFromString<GameSnapshot>(raw)
                                     mutableState.value = mutableState.value.reduce(snapshot, currentTimeMillis(), sessionId)
+                                    if (restartAfterConnect) {
+                                        restartAfterConnect = false
+                                        if (snapshot.phase == GamePhase.GAME_OVER && snapshot.gameOverReason != GameOverReason.NO_PLAYERS) {
+                                            socket.send(Frame.Text("{\"type\":\"restart\"}"))
+                                        }
+                                    }
                                 }
                                 "roster" -> {
                                     val roster = json.decodeFromString<GameRoster>(raw)
