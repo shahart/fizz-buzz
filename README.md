@@ -93,6 +93,15 @@ Android builds use `wss://global-seven-boom.lat-shahar.workers.dev/game` by defa
 
 The Wear OS module is currently excluded from Gradle builds. Android builds target the phone app in `:composeApp`.
 
+## Capacitor Android and iOS apps
+
+The `capacitor-app/` project packages the web client from `docs/` as separate
+Android and iOS apps. It does not modify the Compose app in `composeApp/`.
+Capacitor uses native speech recognition on both mobile platforms; run
+`npm install` and `npm run sync` from `capacitor-app/` to generate/sync the
+web bundle and native projects. See [capacitor-app/README.md](capacitor-app/README.md)
+for build instructions.
+
 ## Firebase Analytics (Android)
 
 The Android app includes Google Analytics for Firebase. To connect a build to the Firebase project:

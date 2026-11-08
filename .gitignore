@@ -10,4 +10,8 @@ worker/node_modules
 worker/.wrangler
 composeApp/google-services.json
 node_modules/
+capacitor-app/www/
+capacitor-app/android/app/src/main/assets/public/
+capacitor-app/ios/App/App/public/
+capacitor-app/ios/App/Pods/
 composeApp/release/

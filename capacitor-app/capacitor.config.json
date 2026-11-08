@@ -1,0 +1,6 @@
+{
+  "appId": "com.shahartal.sevenboom",
+  "appName": "7-Boom",
+  "webDir": "www",
+  "bundledWebRuntime": false
+}
