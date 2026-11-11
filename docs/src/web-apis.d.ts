@@ -1,5 +1,4 @@
 interface Window {
-  // Capacitor?: { isNativePlatform?: () => boolean };
   webkitAudioContext?: typeof AudioContext;
   SpeechRecognition?: new () => SpeechRecognitionLike;
   webkitSpeechRecognition?: new () => SpeechRecognitionLike;
@@ -20,4 +19,3 @@ interface SpeechRecognitionLike {
 
 declare module "https://www.gstatic.com/firebasejs/12.17.1/firebase-app.js";
 declare module "https://www.gstatic.com/firebasejs/12.17.1/firebase-analytics.js";
-// declare module "@capacitor-community/speech-recognition";

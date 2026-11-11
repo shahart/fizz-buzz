@@ -80,6 +80,7 @@ class MainActivityTest {
 
         // The real MainActivity starts with a one-player game, so the duplicate labels stay hidden.
         composeRule.onAllNodesWithTag("player-indicators").assertCountEquals(0)
+        composeRule.onNodeWithTag("network-status").assertIsDisplayed()
 
         session.publish(connectedPlayers = 2, activeSessionId = "other")
         composeRule.onNodeWithTag("player-indicators").performScrollTo().assertIsDisplayed()
@@ -108,6 +109,23 @@ class MainActivityTest {
 
         session.publish(connectedPlayers = 1, activeSessionId = session.sessionId, connectionStatus = ConnectionStatus.SOLO)
         composeRule.onAllNodesWithTag("player-indicators").assertCountEquals(0)
+        composeRule.onNodeWithTag("network-status").performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun playerCountChangeShowsRedNotice() {
+        chooseNicknameIfNeeded()
+        val session = requireNotNull(FakeSessionFactory.lastSession)
+        session.publish(connectedPlayers = 1, activeSessionId = session.sessionId)
+        composeRule.waitForIdle()
+
+        session.publish(connectedPlayers = 2, activeSessionId = "other")
+        composeRule.waitUntil(5_000) {
+            composeRule.onAllNodesWithTag("player-count-notice").fetchSemanticsNodes().isNotEmpty()
+        }
+        composeRule.onNodeWithTag("player-count-notice").assertIsDisplayed()
+        val isRtl = composeRule.activity.resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
+        composeRule.onNodeWithText(if (isRtl) "מספר השחקנים במשחק: 2" else "Players in the game: 2").assertIsDisplayed()
     }
 
     @Test
@@ -266,6 +284,7 @@ private class FakeGameSession(
     override fun join() = Unit
     override fun leaveForFocusLoss() = Unit
     override fun restart() = Unit
+    override fun restartOnline() = Unit
     override fun continueSolo() = Unit
     override fun submitBoom(turnId: String) { boomAnswers += turnId }
     override fun submitNumber(turnId: String, number: Int) { numberAnswers += turnId to number }

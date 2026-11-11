@@ -34,6 +34,7 @@ interface GameSessionController {
     fun join()
     fun leaveForFocusLoss()
     fun restart()
+    fun restartOnline()
     fun continueSolo()
     fun submitBoom(turnId: String)
     fun submitNumber(turnId: String, number: Int)
@@ -97,18 +98,65 @@ class GameSession(
         if (mutableState.value.connectionStatus == ConnectionStatus.SOLO) {
             startSoloGame()
         } else {
-            restartAfterConnect = true
-            connection = null
-            connectionJob?.cancel()
-            mutableState.value = mutableState.value.copy(connectionStatus = ConnectionStatus.JOINING)
-            connectionJob = scope.launch {
-                connectionLoop()
+            restartOnline()
+        }
+    }
+
+    override fun restartOnline() {
+        restartAfterConnect = true
+        shouldBeJoined = true
+        val active = connection
+        connection = null
+        connectionJob?.cancel()
+        connectionJob = null
+        localDeadlineJob?.cancel()
+        localDeadlineJob = null
+        lastRecordedTurnId = null
+        pendingPingId = null
+        mutableState.value = mutableState.value.copy(
+            connectionStatus = ConnectionStatus.JOINING,
+            snapshot = null,
+            roster = null,
+            latencyMillis = null,
+        )
+        connectionJob = scope.launch { connectionLoop() }
+        if (active != null) {
+            scope.launch {
+                try {
+                    active.close(CloseReason(CloseReason.Codes.NORMAL, "restart requested"))
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (_: Throwable) {
+                    // The previous connection may already be closed.
+                }
             }
         }
     }
 
     override fun continueSolo() {
-        if (mutableState.value.connectionStatus == ConnectionStatus.SOLO_PENDING) startSoloGame()
+        val before = mutableState.value
+        if (before.connectionStatus == ConnectionStatus.SOLO_PENDING) {
+            shouldBeJoined = false
+            startSoloGame()
+            return
+        }
+        if (before.connectionStatus != ConnectionStatus.CONNECTED || before.snapshot?.phase != GamePhase.ACTIVE) return
+
+        shouldBeJoined = false
+        val active = connection
+        connection = null
+        connectionJob?.cancel()
+        connectionJob = null
+        startSoloGame()
+        scope.launch {
+            try {
+                active?.close(CloseReason(CloseReason.Codes.NORMAL, "network unavailable"))
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Throwable) {
+                // The socket may already be closed when connectivity changes.
+            }
+        }
     }
 
     override fun submitBoom(turnId: String) {
@@ -239,10 +287,15 @@ class GameSession(
                 connection = null
             }
             if (shouldBeJoined) {
-                mutableState.value = mutableState.value.copy(
-                    connectionStatus = ConnectionStatus.SOLO_PENDING,
-                    latencyMillis = null,
-                )
+                if (mutableState.value.snapshot?.phase == GamePhase.ACTIVE) {
+                    shouldBeJoined = false
+                    startSoloGame()
+                } else {
+                    mutableState.value = mutableState.value.copy(
+                        connectionStatus = ConnectionStatus.SOLO_PENDING,
+                        latencyMillis = null,
+                    )
+                }
             }
             return
         }
@@ -284,6 +337,7 @@ class GameSession(
     }
 
     private fun startSoloGame() {
+        restartAfterConnect = false
         val before = mutableState.value
         val startingNumber = before.snapshot
             ?.takeIf { it.phase == GamePhase.ACTIVE }

@@ -32,3 +32,6 @@ expect fun ObserveWebKeyboardControls(enabled: Boolean, onLeft: () -> Unit, onRi
 
 @Composable
 expect fun ObserveGameLifecycle(onStopped: () -> Unit, onResumed: () -> Unit)
+
+@Composable
+expect fun ObserveNetworkConnectivity(onOnlineChanged: (Boolean) -> Unit)

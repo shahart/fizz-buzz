@@ -15,7 +15,8 @@ const types = {
 
 createServer(async (request, response) => {
   const pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
-  const requested = resolve(root, `.${pathname === "/" ? "/index.html" : pathname}`);
+  const staticPath = pathname === "/docs" ? "/" : pathname.startsWith("/docs/") ? pathname.slice(5) : pathname;
+  const requested = resolve(root, `.${staticPath === "/" ? "/index.html" : staticPath}`);
   if (requested !== root && !requested.startsWith(`${root}${sep}`)) {
     response.writeHead(403).end();
     return;

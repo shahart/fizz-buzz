@@ -1,11 +1,15 @@
 package com.shahartal.fizzbuzz
 
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.util.Log
 import android.view.KeyEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.platform.LocalContext
 import android.content.Context
 import android.content.ContextWrapper
@@ -17,6 +21,8 @@ import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.websocket.WebSockets
 import java.util.UUID
 import java.util.TimeZone
+import android.os.Handler
+import android.os.Looper
 
 actual fun createGameHttpClient(): HttpClient = HttpClient(OkHttp) { install(WebSockets) }
 actual fun currentTimeMillis(): Long = System.currentTimeMillis()
@@ -115,5 +121,32 @@ actual fun ObserveGameLifecycle(onStopped: () -> Unit, onResumed: () -> Unit) {
         }
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
+    }
+}
+
+@Composable
+actual fun ObserveNetworkConnectivity(onOnlineChanged: (Boolean) -> Unit) {
+    val context = LocalContext.current.applicationContext
+    val latestCallback = rememberUpdatedState(onOnlineChanged)
+    DisposableEffect(context) {
+        val manager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val mainHandler = Handler(Looper.getMainLooper())
+        fun hasValidatedInternet(): Boolean {
+            val network = manager.activeNetwork ?: return false
+            val capabilities = manager.getNetworkCapabilities(network) ?: return false
+            return capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        }
+        fun publishStatus() {
+            mainHandler.post { latestCallback.value(hasValidatedInternet()) }
+        }
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = publishStatus()
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) = publishStatus()
+            override fun onLost(network: Network) = publishStatus()
+        }
+        latestCallback.value(hasValidatedInternet())
+        manager.registerDefaultNetworkCallback(callback)
+        onDispose { manager.unregisterNetworkCallback(callback) }
     }
 }

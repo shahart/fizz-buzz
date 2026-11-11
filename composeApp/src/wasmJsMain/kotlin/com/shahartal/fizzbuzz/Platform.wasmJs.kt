@@ -3,6 +3,7 @@ package com.shahartal.fizzbuzz
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.js.Js
 import io.ktor.client.plugins.websocket.WebSockets
@@ -73,6 +74,15 @@ actual fun rememberBestNumberStore(): BestNumberStore = remember {
 actual fun ObserveGameLifecycle(onStopped: () -> Unit, onResumed: () -> Unit) {
     DisposableEffect(onStopped, onResumed) {
         val cleanup = observeVisibility(onStopped, onResumed)
+        onDispose(cleanup)
+    }
+}
+
+@Composable
+actual fun ObserveNetworkConnectivity(onOnlineChanged: (Boolean) -> Unit) {
+    val latestCallback = rememberUpdatedState(onOnlineChanged)
+    DisposableEffect(Unit) {
+        val cleanup = observeNetworkConnectivity { latestCallback.value(it) }
         onDispose(cleanup)
     }
 }
@@ -200,6 +210,19 @@ private external fun browserGameUrl(sessionId: String, nickname: String): String
     };
 }""")
 private external fun observeVisibility(hidden: () -> Unit, visible: () -> Unit): () -> Unit
+
+@OptIn(ExperimentalWasmJsInterop::class)
+@JsFun("""callback => {
+    const update = () => callback(navigator.onLine);
+    window.addEventListener('online', update);
+    window.addEventListener('offline', update);
+    update();
+    return () => {
+        window.removeEventListener('online', update);
+        window.removeEventListener('offline', update);
+    };
+}""")
+private external fun observeNetworkConnectivity(callback: (Boolean) -> Unit): () -> Unit
 
 @OptIn(ExperimentalWasmJsInterop::class)
 @JsFun("""(left, right) => {

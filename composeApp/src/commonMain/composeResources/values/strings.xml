@@ -23,6 +23,11 @@
     <string name="joining">Joining the global game…</string>
     <string name="reconnecting">Connection lost — reconnecting…</string>
     <string name="solo_mode_title">Playing offline</string>
+    <string name="online_status">Online</string>
+    <string name="offline_status">Offline</string>
+    <string name="connection_lost_notice">You are offline. Continuing locally.</string>
+    <string name="connection_restored_notice">You’re back online.</string>
+    <string name="player_count_changed">Players in the game: %1$d</string>
     <string name="solo_mode_message">The global game is unavailable. You can continue in single-player mode.</string>
     <string name="continue_solo">Continue</string>
     <string name="waiting">Waiting</string>

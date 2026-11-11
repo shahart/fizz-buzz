@@ -19,6 +19,44 @@ test("shows the icon splash before the initial lobby", async ({ page }) => {
   await expect(page.locator("#splash-screen")).toHaveCount(0);
 });
 
+test("cached site loads and starts a solo game while offline", async ({ page, context }) => {
+  await page.goto("/docs/index.html");
+  await page.evaluate(() => navigator.serviceWorker.ready);
+  await expect.poll(() => page.evaluate(() => Boolean(navigator.serviceWorker.controller))).toBe(true);
+
+  await context.setOffline(true);
+  await page.reload();
+  await expect(page.getByRole("button", { name: /Join game/ })).toBeVisible();
+  await page.getByRole("button", { name: "Join game" }).click();
+  await expect(page.locator("#offline-dialog")).toBeVisible({ timeout: 10000 });
+  await page.getByRole("button", { name: "Continue offline" }).click();
+  await expect(page.locator(".number-orb")).toHaveText("1");
+  await page.getByRole("button", { name: "Answer with the number" }).click();
+  await expect(page.locator(".number-orb")).toHaveText("2");
+  await context.setOffline(false);
+  await expect(page.locator(".top-chip")).toContainText("Online");
+});
+
+test("Hebrew lobby fits the 440px phone viewport without horizontal clipping", async ({ page }) => {
+  await page.setViewportSize({ width: 440, height: 956 });
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "language", { configurable: true, get: () => "he-IL" });
+  });
+  await page.goto("/");
+  const layout = await page.evaluate(() => ({
+    viewport: document.documentElement.clientWidth,
+    page: document.documentElement.scrollWidth,
+    app: document.querySelector(".app-shell").getBoundingClientRect().width,
+    card: (() => {
+      const rect = document.querySelector(".game-card").getBoundingClientRect();
+      return { width: rect.width, left: rect.left, right: rect.right };
+    })(),
+  }));
+  expect(layout.page).toBeLessThanOrEqual(layout.viewport);
+  expect(layout.card.left).toBeGreaterThanOrEqual(0);
+  expect(layout.card.right).toBeLessThanOrEqual(layout.viewport);
+});
+
 test("lobby instructions are prominent and fit in the Hebrew mobile layout", async ({ page }) => {
   await page.setViewportSize({ width: 360, height: 740 });
   await page.addInitScript(() => {
@@ -116,6 +154,7 @@ async function connectWithRoster(page, { language = "en-US" } = {}) {
     }) });
   }, { sessionId, otherId, now });
   await expect(page.locator(".player-corner")).toBeVisible();
+  await expect(page.locator(".top-chip")).toContainText(language.startsWith("he") ? "מקוון" : "Online");
   return { sessionId, otherId };
 }
 
@@ -160,6 +199,54 @@ test("player indicators render, follow turn changes and roster updates, and hide
   });
   await expect(page.locator(".player-corner")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Play again" })).toBeVisible();
+});
+
+test("player count changes show a red localized notice after the initial snapshot", async ({ page }) => {
+  await connectWithRoster(page);
+  await expect(page.locator(".network-notice")).toBeHidden();
+
+  await page.evaluate(() => window.__mockSockets[0].emit("message", { data: JSON.stringify({
+    type: "snapshot", revision: 2, phase: "active", number: 7,
+    turnId: "turn-7", activeSessionId: "other-session", connectedPlayers: 3,
+    serverTime: Date.now(), deadline: Date.now() + 7000,
+    gameOverReason: null, failedSessionId: null, responseRankings: [],
+  }) }));
+
+  await expect(page.locator(".network-notice")).toHaveClass(/offline/);
+  await expect(page.locator(".network-notice")).toContainText("Players in the game: 3");
+});
+
+test("a newly joined player sees a red notice when the initial game has multiple players", async ({ page }) => {
+  await installWebSocketMock(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Join game" }).click();
+  await expect.poll(() => page.evaluate(() => window.__mockSockets.length)).toBe(1);
+  await page.evaluate(() => {
+    const socket = window.__mockSockets[0];
+    socket.emit("open");
+    socket.emit("message", { data: JSON.stringify({
+      type: "snapshot", revision: 1, phase: "active", number: 1,
+      turnId: "turn-1", activeSessionId: "other-session", connectedPlayers: 2,
+      serverTime: Date.now(), deadline: Date.now() + 7000,
+      gameOverReason: null, failedSessionId: null, responseRankings: [],
+    }) });
+  });
+
+  await expect(page.locator(".network-notice")).toHaveClass(/offline/);
+  await expect(page.locator(".network-notice")).toContainText("Players in the game: 2");
+});
+
+test("player count notice is localized in Hebrew", async ({ page }) => {
+  await connectWithRoster(page, { language: "he-IL" });
+  await page.evaluate(() => window.__mockSockets[0].emit("message", { data: JSON.stringify({
+    type: "snapshot", revision: 2, phase: "active", number: 7,
+    turnId: "turn-7", activeSessionId: "other-session", connectedPlayers: 3,
+    serverTime: Date.now(), deadline: Date.now() + 7000,
+    gameOverReason: null, failedSessionId: null, responseRankings: [],
+  }) }));
+
+  await expect(page.locator(".network-notice")).toHaveClass(/offline/);
+  await expect(page.locator(".network-notice")).toContainText("מספר השחקנים במשחק: 3");
 });
 
 test("play again reconnects and retries the restart after receiving the game snapshot", async ({ page }) => {
@@ -242,10 +329,15 @@ test("offline fallback starts a solo round, accepts an answer, and keeps indicat
   await installWebSocketMock(page);
   await page.goto("/");
   await page.getByRole("button", { name: "Join game" }).click();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+    window.dispatchEvent(new Event("offline"));
+  });
   await page.evaluate(() => window.__mockSockets[0].emit("error"));
   await expect(page.locator("#offline-dialog")).toBeVisible();
   await page.getByRole("button", { name: "Continue offline" }).click();
   await expect(page.locator(".number-orb")).toHaveText("1");
+  await expect(page.locator(".top-chip")).toContainText("Offline");
   await expect(page.locator(".player-corner")).toHaveCount(0);
   await page.getByRole("button", { name: "Answer with the number" }).click();
   await expect(page.locator(".number-orb")).toHaveText("2");
@@ -253,6 +345,103 @@ test("offline fallback starts a solo round, accepts an answer, and keeps indicat
   await page.getByRole("button", { name: "BOOM" }).click();
   await expect(page.locator("body")).toHaveAttribute("data-phase", "game-over");
   await expect(page.locator(".player-corner")).toHaveCount(0);
+  await page.getByRole("button", { name: "Play again" }).click();
+  await expect(page.locator(".number-orb")).toHaveText("1");
+  expect(await page.evaluate(() => window.__mockSockets.length)).toBe(1);
+});
+
+test("play again from solo rejoins the shared game after connectivity returns", async ({ page }) => {
+  await installWebSocketMock(page);
+  await page.goto("/");
+  await page.getByRole("button", { name: "Join game" }).click();
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+    window.dispatchEvent(new Event("offline"));
+    window.__mockSockets[0].emit("error");
+  });
+  await page.getByRole("button", { name: "Continue offline" }).click();
+  await page.getByRole("button", { name: "BOOM" }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-phase", "game-over");
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+    window.dispatchEvent(new Event("online"));
+  });
+  await page.getByRole("button", { name: "Play again" }).click();
+  await expect.poll(() => page.evaluate(() => window.__mockSockets.length)).toBe(2);
+  await page.evaluate(() => window.__mockSockets[1].emit("open"));
+  await page.evaluate(() => window.__mockSockets[1].emit("message", { data: JSON.stringify({
+    type: "snapshot", revision: 4, phase: "gameOver", number: 1,
+    turnId: null, activeSessionId: null, connectedPlayers: 1,
+    serverTime: Date.now(), deadline: null, gameOverReason: "wrongAnswer",
+    failedSessionId: "someone", responseRankings: [],
+  }) }));
+  await expect.poll(() => page.evaluate(() => window.__mockSockets[1].sent.map((message) => JSON.parse(message))))
+    .toContainEqual({ type: "restart" });
+});
+
+test("going offline during a game continues locally from the current number", async ({ page }) => {
+  await connectWithRoster(page);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+    window.dispatchEvent(new Event("offline"));
+  });
+  await expect(page.locator("#offline-dialog")).toBeHidden();
+  await expect(page.locator(".number-orb")).toHaveText("7");
+  await expect(page.locator(".top-chip")).toContainText("Offline");
+  await page.getByRole("button", { name: "BOOM" }).click();
+  await expect(page.locator(".number-orb")).toHaveText("8");
+});
+
+test("an active game continues locally if its socket closes", async ({ page }) => {
+  await connectWithRoster(page);
+  await page.evaluate(() => window.__mockSockets[0].emit("close"));
+  await expect(page.locator("#offline-dialog")).toBeHidden();
+  await expect(page.locator(".number-orb")).toHaveText("7");
+  await page.getByRole("button", { name: "BOOM" }).click();
+  await expect(page.locator(".number-orb")).toHaveText("8");
+});
+
+test("network status label updates when the browser goes offline and comes back online", async ({ page }) => {
+  await connectWithRoster(page);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+    window.dispatchEvent(new Event("offline"));
+  });
+  await expect(page.locator(".top-chip")).toContainText("Offline");
+  await expect(page.locator(".network-notice")).toBeVisible();
+  await expect(page.locator(".network-notice")).toContainText("You are offline. Continuing locally.");
+  await expect(page.locator(".number-orb")).toHaveText("7");
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+    window.dispatchEvent(new Event("online"));
+  });
+  await expect(page.locator(".top-chip")).toContainText("Online");
+  await expect(page.locator(".network-notice")).toContainText("You're back online.");
+  await expect(page.locator(".number-orb")).toHaveText("7");
+});
+
+test("logs each offline and online transition once", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__connectivityLogs = [];
+    console.info = (...args) => window.__connectivityLogs.push(args);
+  });
+  await page.goto("/");
+
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => false });
+    window.dispatchEvent(new Event("offline"));
+    window.dispatchEvent(new Event("offline"));
+    Object.defineProperty(navigator, "onLine", { configurable: true, get: () => true });
+    window.dispatchEvent(new Event("online"));
+  });
+
+  const events = await page.evaluate(() => window.__connectivityLogs.filter((args) => args[1] === "connectivity_changed"));
+  expect(events).toEqual([
+    ["[SevenBoom]", "connectivity_changed", { status: "offline" }],
+    ["[SevenBoom]", "connectivity_changed", { status: "online" }],
+  ]);
 });
 
 test("nickname and theme dialogs update the rendered lobby and persist preferences", async ({ page }) => {

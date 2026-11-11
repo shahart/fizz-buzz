@@ -22,23 +22,6 @@ test("the emoji nickname list is unique and matches the expected roster size", (
   assert.equal(new Set(EMOJIS).size, EMOJIS.length);
 });
 
-/*test("Capacitor clients use native speech recognition with platform permissions", async () => {
-  const appSource = await readFile(new URL("../src/app.ts", import.meta.url), "utf8");
-  const wrapperConfig = JSON.parse(await readFile(new URL("../../capacitor-app/capacitor.config.json", import.meta.url), "utf8"));
-  const capacitorPackage = JSON.parse(await readFile(new URL("../../capacitor-app/package.json", import.meta.url), "utf8"));
-  const androidManifest = await readFile(new URL("../../capacitor-app/android/app/src/main/AndroidManifest.xml", import.meta.url), "utf8");
-  const iosPlist = await readFile(new URL("../../capacitor-app/ios/App/App/Info.plist", import.meta.url), "utf8");
-
-  assert.equal(wrapperConfig.webDir, "www");
-  assert.equal(capacitorPackage.dependencies["@capacitor-community/speech-recognition"], "^7.0.1");
-  assert.match(appSource, /window\.Capacitor\?\.isNativePlatform\?\.\(\)/);
-  assert.match(appSource, /nativeSpeechPlugin\.requestPermissions\(\)/);
-  assert.match(appSource, /nativeSpeechPlugin\.start\(\{/);
-  assert.match(appSource, /nativeSpeechPlugin\?\.stop\(\)/);
-  assert.match(androidManifest, /android:name="android\.permission\.RECORD_AUDIO"/);
-  assert.match(iosPlist, /NSMicrophoneUsageDescription/);
-  assert.match(iosPlist, /NSSpeechRecognitionUsageDescription/);
-});*/
 
 test("countdown music is available to the web and Android clients", async () => {
   const track = "cyberwave-orchestra-cinematic-tension-suspenseful-thriller-music-loop-297627.mp3";
@@ -284,7 +267,7 @@ test("the static web entry references the lightweight client and no Compose/WASM
   assert.match(styles, /\.player-corner-emoji \{/);
   assert.match(styles, /html\[dir="rtl"\]/);
   assert.match(styles, /@media \(max-width: 390px\)/);
-  assert.match(copy, /currentPlayer: "השחקן הנוכחי", you: "אתם"/);
+  assert.match(copy, /currentPlayer: "השחקן הנוכחי",\s*you: "אתם"/);
 });
 
 test("web entry uses the replacement PNG icon and shows a one second splash", async () => {

@@ -58,6 +58,11 @@
     <string name="joining">מצטרפים למשחק העולמי…</string>
     <string name="reconnecting">החיבור נותק — מתחברים מחדש…</string>
     <string name="solo_mode_title">משחקים ללא חיבור</string>
+    <string name="online_status">מקוון</string>
+    <string name="offline_status">לא מקוון</string>
+    <string name="connection_lost_notice">אין חיבור לאינטרנט. ממשיכים לשחק מקומית.</string>
+    <string name="connection_restored_notice">החיבור לאינטרנט חזר.</string>
+    <string name="player_count_changed">מספר השחקנים במשחק: %1$d</string>
     <string name="solo_mode_message">המשחק העולמי אינו זמין. אפשר להמשיך במצב לשחקן יחיד.</string>
     <string name="continue_solo">המשך</string>
     <string name="waiting">ממתינים</string>

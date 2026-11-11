@@ -31,6 +31,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Typography
@@ -82,6 +86,11 @@ import fizz_buzz.composeapp.generated.resources.joining
 import fizz_buzz.composeapp.generated.resources.layout_direction
 import fizz_buzz.composeapp.generated.resources.latency
 import fizz_buzz.composeapp.generated.resources.noto_sans_hebrew
+import fizz_buzz.composeapp.generated.resources.offline_status
+import fizz_buzz.composeapp.generated.resources.online_status
+import fizz_buzz.composeapp.generated.resources.player_count_changed
+import fizz_buzz.composeapp.generated.resources.connection_lost_notice
+import fizz_buzz.composeapp.generated.resources.connection_restored_notice
 import fizz_buzz.composeapp.generated.resources.play_again
 import fizz_buzz.composeapp.generated.resources.roster_active_turn
 import fizz_buzz.composeapp.generated.resources.roster_loading
@@ -206,6 +215,20 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
             ?: GameSession(scope, nickname = selectedNickname, initialBestNumber = bestNumber, initialLowestResponseTimeMillis = lowestResponseTime)
     }
     val uiState by session.state.collectAsState()
+    var networkOnline by remember { mutableStateOf(true) }
+    var hasObservedNetwork by remember { mutableStateOf(false) }
+    var networkChange by remember { mutableStateOf<Boolean?>(null) }
+    var previousConnectedPlayers by remember { mutableStateOf<Int?>(null) }
+    var showingPlayerCountNotice by remember { mutableStateOf(false) }
+    val networkSnackbarState = remember { SnackbarHostState() }
+    ObserveNetworkConnectivity { online ->
+        if (hasObservedNetwork && networkOnline != online) {
+            networkChange = online
+        }
+        networkOnline = online
+        hasObservedNetwork = true
+        if (!online) session.continueSolo()
+    }
     val snapshot = uiState.snapshot
     val speech = rememberSpeechRecognizerController()
     var lastHeard by remember { mutableStateOf<String?>(null) }
@@ -232,8 +255,26 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
         }
     }
 
-    LaunchedEffect(snapshot?.connectedPlayers) {
-        snapshot?.let { logGameEvent("players_count", "count=${it.connectedPlayers}") }
+    val playerCountNotice = stringResource(Res.string.player_count_changed, snapshot?.connectedPlayers ?: 0)
+    LaunchedEffect(snapshot?.connectedPlayers, uiState.connectionStatus) {
+        snapshot?.let { current ->
+            logGameEvent("players_count", "count=${current.connectedPlayers}")
+            if (uiState.connectionStatus == ConnectionStatus.CONNECTED) {
+                val previousCount = previousConnectedPlayers
+                val countChanged = if (previousCount == null) current.connectedPlayers > 1
+                else previousCount != current.connectedPlayers
+                previousConnectedPlayers = current.connectedPlayers
+                if (countChanged) {
+                    networkSnackbarState.currentSnackbarData?.dismiss()
+                    showingPlayerCountNotice = true
+                    try {
+                        networkSnackbarState.showSnackbar(playerCountNotice, duration = SnackbarDuration.Short)
+                    } finally {
+                        showingPlayerCountNotice = false
+                    }
+                }
+            }
+        }
     }
     LaunchedEffect(uiState.connectionStatus) {
         when (uiState.connectionStatus) {
@@ -411,7 +452,11 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
                         )
                         ConnectionStatus.JOINING -> StatusText(stringResource(Res.string.joining))
                         ConnectionStatus.RECONNECTING -> StatusText(stringResource(Res.string.reconnecting))
-                        ConnectionStatus.SOLO_PENDING -> StatusText(stringResource(Res.string.solo_mode_title))
+                        ConnectionStatus.SOLO_PENDING -> Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            StatusText(stringResource(Res.string.solo_mode_title))
+                            Spacer(Modifier.height(12.dp))
+                            NetworkStatusBadge(networkOnline)
+                        }
                         ConnectionStatus.CONNECTED, ConnectionStatus.SOLO -> if (snapshot != null) GamePanel(
                             snapshot = snapshot,
                             roster = uiState.roster,
@@ -426,16 +471,36 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
                             lastHeard = lastHeard,
                             onBoom = boomAction,
                             onNumber = numberAction,
-                            onRestart = { logGameEvent("restart_requested"); session.restart() },
+                            onRestart = {
+                                logGameEvent("restart_requested")
+                                if (uiState.connectionStatus == ConnectionStatus.SOLO && networkOnline) {
+                                    session.restartOnline()
+                                } else {
+                                    session.restart()
+                                }
+                            },
                             onShowRoster = { showRoster = true },
                             soundMuted = soundMuted,
                             onToggleSound = toggleSound,
+                            networkOnline = networkOnline,
                             compact = compact,
                         )
                     }
                 }
             }
-
+            SnackbarHost(
+                hostState = networkSnackbarState,
+                modifier = Modifier.align(Alignment.BottomCenter).padding(horizontal = 16.dp, vertical = 16.dp),
+                snackbar = { data ->
+                    Snackbar(
+                        snackbarData = data,
+                        containerColor = if (showingPlayerCountNotice) Red else MaterialTheme.colorScheme.inverseSurface,
+                        contentColor = Color.White,
+                        modifier = Modifier.testTag(if (showingPlayerCountNotice) "player-count-notice" else "network-notice"),
+                    )
+                },
+            )
+            NetworkStatusPopup(networkChange, networkSnackbarState)
         }
 
         if (showNicknamePicker) {
@@ -743,6 +808,7 @@ private fun GamePanel(
     onShowRoster: () -> Unit,
     soundMuted: Boolean,
     onToggleSound: () -> Unit,
+    networkOnline: Boolean,
     compact: Boolean,
 ) {
     val palette = LocalPalette.current
@@ -751,7 +817,13 @@ private fun GamePanel(
     val yourEmoji = nickname
     val gameResult = snapshot.resultFor(sessionId)
     val gameOverTextColor = if (gameResult == GameResult.LOSER || gameResult == GameResult.NONE) Color.White else Color(0xFF103B24)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        NetworkStatusBadge(networkOnline)
+        Spacer(Modifier.width(8.dp))
         SoundToggleButton(soundMuted, onToggleSound, compact)
     }
     if (!failed) {
@@ -949,6 +1021,36 @@ private fun GamePanel(
         fontSize = 9.sp,
         textAlign = TextAlign.Center,
     )
+}
+
+@Composable
+internal fun NetworkStatusBadge(networkOnline: Boolean) {
+    Text(
+        text = stringResource(if (networkOnline) Res.string.online_status else Res.string.offline_status),
+        modifier = Modifier
+            .clip(RoundedCornerShape(50))
+            .background(if (networkOnline) Color(0xFF168A68) else Color(0xFFD92D20))
+            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .testTag("network-status"),
+        color = Color.White,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.Bold,
+    )
+}
+
+@Composable
+internal fun NetworkStatusPopup(networkOnline: Boolean?, hostState: SnackbarHostState) {
+    val offlineNotice = stringResource(Res.string.connection_lost_notice)
+    val onlineNotice = stringResource(Res.string.connection_restored_notice)
+    LaunchedEffect(networkOnline) {
+        if (networkOnline != null) {
+            hostState.currentSnackbarData?.dismiss()
+            hostState.showSnackbar(
+                message = if (networkOnline) onlineNotice else offlineNotice,
+                duration = SnackbarDuration.Short,
+            )
+        }
+    }
 }
 
 @Composable

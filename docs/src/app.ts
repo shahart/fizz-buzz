@@ -6,6 +6,14 @@ import { bindUiEvents } from "./events.js";
 (() => {
   "use strict";
 
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./service-worker.js").catch((error) => {
+        console.warn("Offline support could not be enabled", error);
+      });
+    });
+  }
+
   const THEMES = [
     { id: "classic", unlock: 0, label: "classic", colors: ["#102a43", "#eaf4ff", "#1473e6", "#d92d20"] },
     { id: "mint", unlock: 14, label: "mint", colors: ["#124b42", "#e3f7ee", "#168a68", "#cb3f54"] },
@@ -34,6 +42,7 @@ import { bindUiEvents } from "./events.js";
   const sessionId = makeSessionId();
   const state: any = {
     connection: "idle", socket: null, snapshot: null, roster: [], rosterRevision: -1,
+    networkOnline: navigator.onLine !== false,
     offset: 0, nickname: storageGet("seven-boom-nickname-emoji", "😀"),
     soundMuted: storageGet("seven-boom-sound-muted", "false") === "true",
     theme: storageGet("seven-boom-theme", "classic"), best: numberGet("seven-boom-best-number"),
@@ -41,9 +50,8 @@ import { bindUiEvents } from "./events.js";
     latency: null, pendingPing: null, pingAt: 0, pingTimer: 0, joinTimer: 0,
     lastAnsweredTurn: null, intentionalClose: false, restartAfterConnect: false, speech: null, speechTurn: null,
     lastHeard: "", timerInterval: 0, soloRevision: 0, failureFlash: false, nicknameError: null,
+    networkNoticeTimer: 0,
   };
-  // let nativeSpeechPlugin: any = null;
-  // let nativeSpeechAvailable = false;
   function logLocalEvent(event, details = {}) {
     console.info("[SevenBoom]", event, details);
   }
@@ -52,6 +60,26 @@ import { bindUiEvents } from "./events.js";
 
   function t(key, values = {}) {
     return (strings[key] || key).replace(/\{(\w+)\}/g, (_, name) => String(values[name] ?? ""));
+  }
+  const networkNotice = document.createElement("div");
+  networkNotice.className = "network-notice";
+  networkNotice.setAttribute("role", "status");
+  networkNotice.setAttribute("aria-live", "polite");
+  networkNotice.hidden = true;
+  document.body.append(networkNotice);
+  function showNetworkNotice(online) {
+    showNotice(t(online ? "connectionRestoredNotice" : "connectionLostNotice"), online ? "online" : "offline");
+  }
+  function showPlayerCountNotice(count) {
+    showNotice(t("playerCountChanged", { n: count }), "offline");
+  }
+  function showNotice(message, tone) {
+    networkNotice.textContent = message;
+    networkNotice.classList.toggle("online", tone === "online");
+    networkNotice.classList.toggle("offline", tone === "offline");
+    networkNotice.hidden = false;
+    window.clearTimeout(state.networkNoticeTimer);
+    state.networkNoticeTimer = window.setTimeout(() => { networkNotice.hidden = true; }, 3000);
   }
   function esc(value) {
     return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char]);
@@ -98,11 +126,32 @@ import { bindUiEvents } from "./events.js";
     document.querySelector('meta[name="theme-color"]')?.setAttribute("content", sky);
   }
   function addTopbar(extra = "") {
+    const showNetworkStatus = ["connected", "solo", "soloPending"].includes(state.connection);
+    const networkLabel = state.networkOnline ? t("statusOnline") : t("statusOffline");
     return `<header class="topbar">
       <a class="brand" href="./" aria-label="${esc(t("brand"))}"><span class="brand-mark" aria-hidden="true">7</span><span>${esc(t("brand"))}</span></a>
-      <div class="topbar-actions"><button class="icon-button sound-toggle" type="button" data-action="toggle-mute" aria-label="${esc(t(state.soundMuted ? "unmuteSound" : "muteSound"))}" title="${esc(t(state.soundMuted ? "unmuteSound" : "muteSound"))}">${state.soundMuted ? "🔇" : "🔊"}</button>${extra}<span class="top-chip"><span class="connection-dot ${state.connection === "connected" ? "online" : state.connection === "solo" ? "offline" : ""}"></span>${state.connection === "solo" ? esc(t("statusOffline")) : state.connection === "connected" ? "LIVE" : "7-BOOM"}</span></div>
+      <div class="topbar-actions"><button class="icon-button sound-toggle" type="button" data-action="toggle-mute" aria-label="${esc(t(state.soundMuted ? "unmuteSound" : "muteSound"))}" title="${esc(t(state.soundMuted ? "unmuteSound" : "muteSound"))}">${state.soundMuted ? "🔇" : "🔊"}</button>${extra}<span class="top-chip"><span class="connection-dot ${showNetworkStatus ? (state.networkOnline ? "online" : "offline") : ""}"></span>${showNetworkStatus ? esc(networkLabel) : "7-BOOM"}</span></div>
     </header>`;
   }
+  function updateNetworkStatus() {
+    const networkOnline = navigator.onLine !== false;
+    if (state.networkOnline === networkOnline) return;
+    state.networkOnline = networkOnline;
+    logLocalEvent("connectivity_changed", { status: networkOnline ? "online" : "offline" });
+    showNetworkNotice(networkOnline);
+    if (!networkOnline && state.connection === "connected" && state.snapshot?.phase === "active") {
+      startSolo();
+      if (rosterDialog.open) closeDialog(rosterDialog);
+      return;
+    }
+    render();
+  }
+  window.addEventListener("online", updateNetworkStatus);
+  window.addEventListener("offline", updateNetworkStatus);
+  window.addEventListener("focus", updateNetworkStatus);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) updateNetworkStatus();
+  });
   function render() {
     applyTheme();
     if (state.connection === "joining") {
@@ -184,6 +233,10 @@ import { bindUiEvents } from "./events.js";
     state.roster = [];
     state.lastAnsweredTurn = null;
     render();
+    if (!state.networkOnline) {
+      showOffline();
+      return;
+    }
     const url = gameSocketUrl(location);
     let socket;
     try { socket = state.socket = new WebSocket(`${url}?sessionId=${encodeURIComponent(sessionId)}&nickname=${encodeURIComponent(state.nickname)}&timeZone=${encodeURIComponent(localTimeZone())}`); }
@@ -227,6 +280,11 @@ import { bindUiEvents } from "./events.js";
       clearInterval(state.pingTimer);
       if (state.socket !== socket) return;
       if (state.intentionalClose || !["joining", "connected"].includes(state.connection)) return;
+      if (state.connection === "connected" && state.snapshot?.phase === "active") {
+        if (rosterDialog.open) closeDialog(rosterDialog);
+        startSolo();
+        return;
+      }
       state.connection = "soloPending";
       state.snapshot = null;
       state.roster = [];
@@ -254,6 +312,9 @@ import { bindUiEvents } from "./events.js";
     if (state.connection !== "connected") logLocalEvent("game_connected", { mode: "online" });
     if (previous?.connectedPlayers !== next.connectedPlayers) {
       logLocalEvent("players_count", { count: next.connectedPlayers });
+      if (previous ? previous.connectedPlayers !== next.connectedPlayers : next.connectedPlayers > 1) {
+        showPlayerCountNotice(next.connectedPlayers);
+      }
     }
     if (next.phase === "gameOver" && previous?.phase !== "gameOver" && next.gameOverReason !== "noPlayers") {
       logLocalEvent("game_over", { reason: next.gameOverReason, number: next.number, players: next.connectedPlayers });
@@ -311,6 +372,8 @@ import { bindUiEvents } from "./events.js";
     render();
   }
   function startSolo() {
+    const startingNumber = state.snapshot?.phase === "active" ? state.snapshot.number : 1;
+    state.restartAfterConnect = false;
     prepareCountdownMusic();
     prepareFailureSound();
     prepareWinnerSound();
@@ -326,7 +389,7 @@ import { bindUiEvents } from "./events.js";
     state.responseCount = 0;
     state.latency = null;
     state.lastAnsweredTurn = null;
-    showSoloSnapshot(1);
+    showSoloSnapshot(startingNumber);
   }
   function answer(kind, heardTranscript = null) {
     const snapshot = state.snapshot;
@@ -423,28 +486,16 @@ import { bindUiEvents } from "./events.js";
       countdownMusic.pause();
     }
   }
-  // function isNativeCapacitor() { return Boolean(window.Capacitor?.isNativePlatform?.()); }
   function speechSupported() { return Boolean(window.SpeechRecognition || window.webkitSpeechRecognition); }
-  // function speechSupported() { return nativeSpeechAvailable || (!isNativeCapacitor() && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition)); }
   function stopSpeech() {
     state.speechTurn = null;
     if (!state.speech) return;
-    // if (state.speech.native) {
-    //   state.speech = null;
-    //   nativeSpeechPlugin?.stop().catch(() => {});
-    //   return;
-    // }
     state.speech.onend = null;
     try { state.speech.abort(); } catch { /* Recognition may already be stopped. */ }
     state.speech = null;
   }
   function syncSpeech() {
     const snapshot = state.snapshot;
-    // const native = isNativeCapacitor();
-    // if (native && (!nativeSpeechPlugin || !nativeSpeechAvailable)) {
-    //   if (state.speech) stopSpeech();
-    //   return;
-    // }
     if (!speechSupported() || state.connection !== "connected" || snapshot?.phase !== "active" || snapshot.activeSessionId !== sessionId) {
       if (state.speech) stopSpeech();
       return;
@@ -452,10 +503,6 @@ import { bindUiEvents } from "./events.js";
     if (state.speechTurn === snapshot.turnId) return;
     stopSpeech();
     state.speechTurn = snapshot.turnId;
-    // if (native) {
-    //   startNativeSpeech(snapshot);
-    //   return;
-    // }
     const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     try {
       const recognition = new Recognition();
@@ -493,68 +540,6 @@ import { bindUiEvents } from "./events.js";
       }, 150);
     } catch { state.speechTurn = null; }
   }
-  /*async function startNativeSpeech(snapshot) {
-    const controller = { native: true };
-    state.speech = controller;
-    const preferredLanguage = isHebrew ? "he-IL" : "en-US";
-    const alternateLanguage = preferredLanguage === "he-IL" ? "en-US" : "he-IL";
-    let recognitionLanguage = preferredLanguage;
-    const isCurrentTurn = () => state.speech === controller
-      && state.connection === "connected"
-      && state.snapshot?.phase === "active"
-      && state.snapshot.activeSessionId === sessionId
-      && state.snapshot.turnId === snapshot.turnId;
-    try {
-      let permission = await nativeSpeechPlugin.checkPermissions();
-      if (permission.speechRecognition !== "granted") permission = await nativeSpeechPlugin.requestPermissions();
-      if (permission.speechRecognition !== "granted") {
-        nativeSpeechAvailable = false;
-        render();
-        return;
-      }
-      while (isCurrentTurn()) {
-        try {
-          const result = await nativeSpeechPlugin.start({
-            language: recognitionLanguage,
-            maxResults: 1,
-            partialResults: false,
-            popup: false,
-          });
-          const transcript = result.matches?.[0];
-          if (transcript && isCurrentTurn()) {
-            state.lastHeard = transcript;
-            const answerKind = recognizedAnswer(transcript, snapshot.number);
-            logLocalEvent("speech_answer", { transcript, expected: snapshot.number, mapped: answerKind });
-            answer(answerKind, transcript);
-            return;
-          }
-        } catch { } // Keep touch input available if the native recognizer rejects an attempt. 
-        await new Promise((resolve) => setTimeout(resolve, 250));
-        recognitionLanguage = recognitionLanguage === preferredLanguage ? alternateLanguage : preferredLanguage;
-      }
-    } catch {
-      nativeSpeechAvailable = false;
-      render();
-    } finally {
-      if (state.speech === controller) {
-        state.speech = null;
-        if (state.snapshot?.turnId === snapshot.turnId) state.speechTurn = null;
-      }
-    }
-  }
-  async function loadNativeSpeech() {
-    if (!isNativeCapacitor()) return;
-    try {
-      const module = await import("./native-speech-adapter.js");
-      nativeSpeechPlugin = module.SpeechRecognition;
-      const { available } = await nativeSpeechPlugin.available();
-      nativeSpeechAvailable = available;
-    } catch {
-      nativeSpeechAvailable = false;
-    }
-    render();
-    syncSpeech();
-  }*/
   function leaveOnline() {
     if (state.connection !== "connected" || !state.socket) return;
     state.intentionalClose = true;
@@ -600,5 +585,4 @@ import { bindUiEvents } from "./events.js";
   if (/Firefox|FxiOS/i.test(navigator.userAgent)) openDialog(firefoxSpeechDialog);
   applyTheme();
   render();
-  // void loadNativeSpeech();
 })();

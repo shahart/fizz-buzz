@@ -74,6 +74,10 @@ button:focus-visible { outline: 3px solid #102a43; outline-offset: 4px; }
 .connection-dot { width: 8px; height: 8px; border-radius: 50%; background: #f1ad3f; }
 .connection-dot.online { background: #25a779; box-shadow: 0 0 0 3px rgba(37,167,121,.14); }
 .connection-dot.offline { background: #d92d20; }
+.network-notice { position: fixed; z-index: 20; top: max(14px, env(safe-area-inset-top)); left: 50%; max-width: calc(100vw - 28px); padding: 12px 18px; transform: translateX(-50%); border-radius: 14px; color: white; font-size: 14px; font-weight: 750; text-align: center; box-shadow: 0 10px 30px rgba(16,42,67,.25); }
+.network-notice[hidden] { display: none; }
+.network-notice.online { background: #168a68; }
+.network-notice.offline { background: #d92d20; }
 .stage { flex: 1; display: grid; place-items: center; padding-block: 22px; }
 .game-card {
   width: min(100%, 480px);

@@ -80,8 +80,8 @@ extensions.configure<ApplicationExtension> {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         minSdk = 24
         targetSdk = 36
-        versionCode = 11
-        versionName = "1.13"
+        versionCode = 12
+        versionName = "1.14"
         val workerUrl = providers.gradleProperty("gameWorkerUrl")
             .orElse("wss://global-seven-boom.lat-shahar.workers.dev/game")
             .get()

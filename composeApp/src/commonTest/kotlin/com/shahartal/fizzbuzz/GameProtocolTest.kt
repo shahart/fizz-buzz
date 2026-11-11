@@ -291,6 +291,16 @@ class GameProtocolTest {
     }
 
     @Test
+    fun switchingOfflineDuringAnActiveGameContinuesAtTheCurrentNumber() {
+        val solo = GameUiState(connectionStatus = ConnectionStatus.CONNECTED, snapshot = active)
+            .startSoloGame("a", "🚀", nowMillis = 20_000, startingNumber = active.number)
+
+        assertEquals(ConnectionStatus.SOLO, solo.connectionStatus)
+        assertEquals(17, solo.snapshot?.number)
+        assertTrue(solo.isActiveTurn("a"))
+    }
+
+    @Test
     fun soloGameEndsOnWrongAnswerOrDeadline() {
         val solo = GameUiState().startSoloGame("a", "🚀", nowMillis = 1_000, startingNumber = 7)
         val turnId = requireNotNull(solo.snapshot?.turnId)
