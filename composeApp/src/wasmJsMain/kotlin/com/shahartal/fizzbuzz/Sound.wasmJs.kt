@@ -71,8 +71,10 @@ private external fun stopBrowserCountdownMusic()
     """() => {
         const audio = window.__failureSound || new Audio('./wrong-buzzer-6268.mp3');
         window.__failureSound = audio;
+        audio.muted = true;
         const attempt = audio.play();
         audio.pause();
+        audio.muted = false;
         if (attempt) attempt.catch(() => {});
     }""",
 )
@@ -99,8 +101,10 @@ private external fun stopBrowserFailureSound()
     """() => {
         const audio = window.__winnerSound || new Audio('./u_o8xh7gwsrj-cute_happy_victory-476376.mp3');
         window.__winnerSound = audio;
+        audio.muted = true;
         const attempt = audio.play();
         audio.pause();
+        audio.muted = false;
         if (attempt) attempt.catch(() => {});
     }""",
 )

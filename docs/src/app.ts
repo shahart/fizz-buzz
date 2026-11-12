@@ -220,11 +220,14 @@ import { bindUiEvents } from "./events.js";
 
   bindUiEvents({ byId, storageSet, render, syncSoundMute, closeDialog, nicknameDialog, themeDialog, rosterDialog, offlineDialog, firefoxSpeechDialog, state, startOnline, showNicknamePicker, showThemePicker, openRoster, startSolo, answer, logLocalEvent, send, isHebrew, t, sessionId });
   function startOnline() {
+    stopResultSounds();
     if (!NICKNAMES.has(state.nickname)) { showNicknamePicker(); return; }
     logLocalEvent("join_started", { mode: "online" });
     prepareCountdownMusic();
-    prepareFailureSound();
-    prepareWinnerSound();
+    if (!state.restartAfterConnect) {
+      prepareFailureSound();
+      prepareWinnerSound();
+    }
     clearTimeout(state.joinTimer);
     clearInterval(state.pingTimer);
     state.intentionalClose = false;
@@ -316,7 +319,7 @@ import { bindUiEvents } from "./events.js";
         showPlayerCountNotice(next.connectedPlayers);
       }
     }
-    if (next.phase === "gameOver" && previous?.phase !== "gameOver" && next.gameOverReason !== "noPlayers") {
+    if (next.phase === "gameOver" && previous?.phase !== "gameOver" && next.gameOverReason !== "noPlayers" && !state.restartAfterConnect) {
       logLocalEvent("game_over", { reason: next.gameOverReason, number: next.number, players: next.connectedPlayers });
       if (next.failedSessionId === sessionId) playFailureSound();
       else if (isWinnerForSnapshot(next, sessionId)) playWinnerSound();
@@ -371,12 +374,15 @@ import { bindUiEvents } from "./events.js";
     syncCountdownMusic();
     render();
   }
-  function startSolo() {
+  function startSolo(prepareResultSounds = true) {
+    stopResultSounds();
     const startingNumber = state.snapshot?.phase === "active" ? state.snapshot.number : 1;
     state.restartAfterConnect = false;
     prepareCountdownMusic();
-    prepareFailureSound();
-    prepareWinnerSound();
+    if (prepareResultSounds) {
+      prepareFailureSound();
+      prepareWinnerSound();
+    }
     clearTimeout(state.joinTimer);
     clearInterval(state.pingTimer);
     state.intentionalClose = true;
@@ -443,29 +449,36 @@ import { bindUiEvents } from "./events.js";
     winnerSound.currentTime = 0;
     winnerSound.play().catch(() => {});
   }
+  function stopResultSounds() {
+    failureSound.pause();
+    failureSound.currentTime = 0;
+    winnerSound.pause();
+    winnerSound.currentTime = 0;
+  }
   function syncSoundMute() {
     syncCountdownMusic();
     if (state.soundMuted) {
-      failureSound.pause();
-      failureSound.currentTime = 0;
-      winnerSound.pause();
-      winnerSound.currentTime = 0;
+      stopResultSounds();
     }
   }
   const failureSound = new Audio("./wrong-buzzer-6268.mp3");
   failureSound.volume = 0.4;
   function prepareFailureSound() {
     if (state.soundMuted) return;
+    failureSound.muted = true;
     const attempt = failureSound.play();
     failureSound.pause();
+    failureSound.muted = false;
     if (attempt) attempt.catch(() => {});
   }
   const winnerSound = new Audio("./u_o8xh7gwsrj-cute_happy_victory-476376.mp3");
   winnerSound.volume = 0.4;
   function prepareWinnerSound() {
     if (state.soundMuted) return;
+    winnerSound.muted = true;
     const attempt = winnerSound.play();
     winnerSound.pause();
+    winnerSound.muted = false;
     if (attempt) attempt.catch(() => {});
   }
   const countdownMusic = new Audio("./cyberwave-orchestra-cinematic-tension-suspenseful-thriller-music-loop-297627.mp3");

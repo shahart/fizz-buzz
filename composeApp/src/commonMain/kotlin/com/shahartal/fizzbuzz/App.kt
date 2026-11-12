@@ -473,6 +473,8 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
                             onNumber = numberAction,
                             onRestart = {
                                 logGameEvent("restart_requested")
+                                stopFailureSound()
+                                stopWinnerSound()
                                 if (uiState.connectionStatus == ConnectionStatus.SOLO && networkOnline) {
                                     session.restartOnline()
                                 } else {

@@ -22,7 +22,7 @@ export function bindUiEvents(d: Record<string, any>) {
       case "answer-boom": answer("boom"); break;
       case "answer-number": answer("number"); break;
       case "play-again":
-        if (state.connection === "solo" && !state.networkOnline) startSolo();
+        if (state.connection === "solo" && !state.networkOnline) startSolo(false);
         else {
           logLocalEvent("restart_requested");
           state.restartAfterConnect = true;

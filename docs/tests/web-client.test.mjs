@@ -53,6 +53,7 @@ test("mute is available across screens and countdown playback resumes without re
   const eventsSource = await readFile(new URL("../src/events.ts", import.meta.url), "utf8");
   const rendererSource = await readFile(new URL("../src/render.ts", import.meta.url), "utf8");
   const androidSource = await readFile(new URL("../../composeApp/src/androidMain/kotlin/com/shahartal/fizzbuzz/Sound.android.kt", import.meta.url), "utf8");
+  const wasmSource = await readFile(new URL("../../composeApp/src/wasmJsMain/kotlin/com/shahartal/fizzbuzz/Sound.wasmJs.kt", import.meta.url), "utf8");
   const appSource = await readFile(new URL("../../composeApp/src/commonMain/kotlin/com/shahartal/fizzbuzz/App.kt", import.meta.url), "utf8");
   const syncFunction = webSource.split("function syncCountdownMusic()")[1].split("function speechSupported()")[0];
 
@@ -71,6 +72,16 @@ test("mute is available across screens and countdown playback resumes without re
   assert.match(appSource, /LaunchedEffect\(snapshot\?\.revision, snapshot\?\.phase, soundMuted\)/);
   assert.match(webSource, /function prepareFailureSound\(\) \{\s*if \(state\.soundMuted\) return;/);
   assert.match(webSource, /function prepareWinnerSound\(\) \{\s*if \(state\.soundMuted\) return;/);
+  assert.match(webSource, /failureSound\.muted = true;\s*const attempt = failureSound\.play\(\);\s*failureSound\.pause\(\);\s*failureSound\.muted = false;/);
+  assert.match(webSource, /winnerSound\.muted = true;\s*const attempt = winnerSound\.play\(\);\s*winnerSound\.pause\(\);\s*winnerSound\.muted = false;/);
+  assert.match(wasmSource, /audio\.muted = true;\s*const attempt = audio\.play\(\);\s*audio\.pause\(\);\s*audio\.muted = false;/);
+  assert.match(webSource, /function startOnline\(\) \{\s*stopResultSounds\(\);/);
+  assert.match(webSource, /if \(!state\.restartAfterConnect\) \{\s*prepareFailureSound\(\);\s*prepareWinnerSound\(\);/);
+  assert.match(webSource, /function startSolo\(prepareResultSounds = true\) \{\s*stopResultSounds\(\);/);
+  assert.match(eventsSource, /case "play-again":\s*if \(state\.connection === "solo" && !state\.networkOnline\) startSolo\(false\)/);
+  assert.match(webSource, /if \(prepareResultSounds\) \{\s*prepareFailureSound\(\);\s*prepareWinnerSound\(\);/);
+  assert.match(webSource, /next\.phase === "gameOver" && previous\?\.phase !== "gameOver" && next\.gameOverReason !== "noPlayers" && !state\.restartAfterConnect/);
+  assert.match(appSource, /onRestart = \{\s*logGameEvent\("restart_requested"\)\s*stopFailureSound\(\)\s*stopWinnerSound\(\)/);
 });
 
 test("speech recognition alternates English and Hebrew when the preferred language misses", async () => {
