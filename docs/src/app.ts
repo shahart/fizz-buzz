@@ -30,7 +30,7 @@ import { bindUiEvents } from "./events.js";
   const strings = COPY[lang];
   document.documentElement.lang = lang;
   document.documentElement.dir = isHebrew ? "rtl" : "ltr";
-  document.title = (isHebrew ? "שבע בום" : "7-Boom") + " v1.13";
+  document.title = (isHebrew ? "שבע בום" : "7-Boom") + " v" + "1.14";
 
   const root = document.getElementById("app")!;
   const byId = (id) => document.getElementById(id);
@@ -455,6 +455,7 @@ import { bindUiEvents } from "./events.js";
   const failureSound = new Audio("./wrong-buzzer-6268.mp3");
   failureSound.volume = 0.4;
   function prepareFailureSound() {
+    if (state.soundMuted) return;
     const attempt = failureSound.play();
     failureSound.pause();
     if (attempt) attempt.catch(() => {});
@@ -462,6 +463,7 @@ import { bindUiEvents } from "./events.js";
   const winnerSound = new Audio("./u_o8xh7gwsrj-cute_happy_victory-476376.mp3");
   winnerSound.volume = 0.4;
   function prepareWinnerSound() {
+    if (state.soundMuted) return;
     const attempt = winnerSound.play();
     winnerSound.pause();
     if (attempt) attempt.catch(() => {});

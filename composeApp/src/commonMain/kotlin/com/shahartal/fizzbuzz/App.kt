@@ -366,7 +366,7 @@ private fun MultiplayerGame(compact: Boolean, sessionFactory: GameSessionFactory
         }
     }
 
-    LaunchedEffect(snapshot?.revision, snapshot?.phase) {
+    LaunchedEffect(snapshot?.revision, snapshot?.phase, soundMuted) {
         if (
             snapshot?.phase == GamePhase.GAME_OVER &&
             snapshot.revision != soundedRevision &&

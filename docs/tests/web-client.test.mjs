@@ -68,6 +68,9 @@ test("mute is available across screens and countdown playback resumes without re
   assert.match(androidSource, /if \(isPlaying\) pause\(\)/);
   assert.match(androidSource, /if \(isCurrentPlayerTurn\) 0\.05f else 0\.05f/);
   assert.match(appSource, /SoundToggleButton\(soundMuted, onToggleSound, compact\)/);
+  assert.match(appSource, /LaunchedEffect\(snapshot\?\.revision, snapshot\?\.phase, soundMuted\)/);
+  assert.match(webSource, /function prepareFailureSound\(\) \{\s*if \(state\.soundMuted\) return;/);
+  assert.match(webSource, /function prepareWinnerSound\(\) \{\s*if \(state\.soundMuted\) return;/);
 });
 
 test("speech recognition alternates English and Hebrew when the preferred language misses", async () => {
